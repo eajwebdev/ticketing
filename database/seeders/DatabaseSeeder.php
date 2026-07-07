@@ -57,8 +57,8 @@ class DatabaseSeeder extends Seeder
         }
 
         // ---- Default admin (change the password after first login!) ----
-        $email = env('SEED_ADMIN_EMAIL', 'admin@eaj.com');
-        $password = env('SEED_ADMIN_PASSWORD', 'password');
+        $email = env('SEED_ADMIN_EMAIL', 'abriljredwin@gmail.com');
+        $password = env('SEED_ADMIN_PASSWORD', 'edzkiE@2026');
 
         User::firstOrCreate(
             ['email' => $email],
