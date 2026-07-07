@@ -40,8 +40,8 @@ function SidebarContent({ onNavigate }) {
   const items = navItems(user?.role);
   return (
     <div className="flex h-full flex-col gap-1 p-4">
-      <Link to="/app" className="mb-4 px-2" onClick={onNavigate}>
-        <Logo />
+      <Link to="/app" className="mb-4 flex justify-center px-2 py-1" onClick={onNavigate}>
+        <Logo size="lg" />
       </Link>
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto">
         {items.map((item, i) =>
