@@ -25,6 +25,15 @@ export function getEcho() {
     },
   });
 
+  // Expose the socket id so API requests can set X-Socket-ID (enables broadcast toOthers()).
+  try {
+    echoInstance.connector.pusher.connection.bind('connected', () => {
+      window.__eajSocketId = echoInstance.socketId();
+    });
+  } catch {
+    /* ignore */
+  }
+
   return echoInstance;
 }
 

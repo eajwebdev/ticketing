@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Building2, Search, UserPlus, Copy, CheckCircle2, Store, Check, X, Clock3 } from 'lucide-react';
+import { Building2, Search, UserPlus, Copy, CheckCircle2, Store, Check, X, Clock3, Pencil } from 'lucide-react';
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,6 +28,7 @@ export default function AdminClients() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
+  const [dialog, setDialog] = useState(null); // null closed, {} add, {...client} edit
 
   const params = { ...(search && { search }), ...(status !== 'all' && { status }) };
   const { data, isLoading } = useQuery({
@@ -59,7 +60,7 @@ export default function AdminClients() {
           <h1 className="text-2xl font-bold text-white">Clients</h1>
           <p className="mt-1 text-sm text-muted-foreground">Approve new sign-ups and manage client accounts.</p>
         </div>
-        <AddClientDialog />
+        <Button onClick={() => setDialog({})}><UserPlus /> Add Client</Button>
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -100,7 +101,10 @@ export default function AdminClients() {
                       <div className="truncate text-xs text-muted-foreground">{c.name}</div>
                     </div>
                   </div>
-                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${meta.cls}`}>{meta.label}</span>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${meta.cls}`}>{meta.label}</span>
+                    <IconButton label="Edit details" icon={Pencil} size="icon-sm" onClick={() => setDialog(c)} />
+                  </div>
                 </div>
                 <div className="mt-4 space-y-1.5 text-xs text-muted-foreground">
                   <div className="truncate">✉ {c.email}</div>
@@ -148,40 +152,53 @@ export default function AdminClients() {
           description={status === 'pending' ? 'New self-registered clients will appear here for approval.' : undefined}
         />
       )}
+
+      {dialog !== null && (
+        <ClientDialog client={dialog} onClose={() => setDialog(null)} />
+      )}
     </div>
   );
 }
 
-function AddClientDialog() {
+function ClientDialog({ client, onClose }) {
+  const isEdit = !!client.id;
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
   const [tempPassword, setTempPassword] = useState('');
   const [errors, setErrors] = useState({});
   const [form, setForm] = useState({
-    name: '', store_name: '', email: '', business_type: '', contact_person: '', phone: '', address: '', notes: '',
+    name: client.name ?? '',
+    store_name: client.store_name ?? '',
+    email: client.email ?? '',
+    business_type: client.business_type ?? '',
+    contact_person: client.contact_person ?? '',
+    phone: client.phone ?? '',
+    address: client.address ?? '',
+    notes: client.notes ?? '',
   });
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const err = (k) => errors[k]?.[0];
 
   const mutation = useMutation({
-    mutationFn: async () => (await api.post('/admin/clients', form)).data,
+    mutationFn: async () => {
+      const url = isEdit ? `/admin/clients/${client.id}` : '/admin/clients';
+      return (await api[isEdit ? 'patch' : 'post'](url, form)).data;
+    },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['admin-clients'] });
-      setTempPassword(data.temporary_password);
-      toast.success('Client account created.');
+      if (isEdit) {
+        toast.success('Client updated.');
+        onClose();
+      } else {
+        setTempPassword(data.temporary_password);
+        toast.success('Client account created.');
+      }
     },
     onError: (e) => setErrors(e.response?.data?.errors || {}),
   });
 
-  const reset = () => {
-    setForm({ name: '', store_name: '', email: '', business_type: '', contact_person: '', phone: '', address: '', notes: '' });
-    setTempPassword(''); setErrors({});
-  };
-
   return (
-    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
-      <DialogTrigger asChild><Button><UserPlus /> Add Client</Button></DialogTrigger>
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-2xl">
         {tempPassword ? (
           <div className="text-center">
@@ -192,13 +209,15 @@ function AddClientDialog() {
               <code className="font-mono text-lg text-crimson-soft">{tempPassword}</code>
               <Button size="icon" variant="secondary" onClick={() => { navigator.clipboard.writeText(tempPassword); toast.success('Copied'); }} aria-label="Copy"><Copy /></Button>
             </div>
-            <DialogFooter className="mt-6"><Button onClick={() => { setOpen(false); reset(); }}>Done</Button></DialogFooter>
+            <DialogFooter className="mt-6"><Button onClick={onClose}>Done</Button></DialogFooter>
           </div>
         ) : (
           <>
             <DialogHeader>
-              <DialogTitle>Add a new client</DialogTitle>
-              <DialogDescription>Create a rich client profile. A temporary password will be generated.</DialogDescription>
+              <DialogTitle>{isEdit ? `Edit ${client.store_name || client.name}` : 'Add a new client'}</DialogTitle>
+              <DialogDescription>
+                {isEdit ? 'Update this client’s business profile and contact details.' : 'Create a rich client profile. A temporary password will be generated.'}
+              </DialogDescription>
             </DialogHeader>
             <form onSubmit={(e) => { e.preventDefault(); setErrors({}); mutation.mutate(); }} className="space-y-4">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -212,7 +231,8 @@ function AddClientDialog() {
               <F label="Address / branch" e={err('address')}><Input value={form.address} onChange={set('address')} /></F>
               <F label="Notes" e={err('notes')}><Textarea rows={3} value={form.notes} onChange={set('notes')} placeholder="Account notes, plan, special requirements…" /></F>
               <DialogFooter>
-                <Button type="submit" disabled={mutation.isPending}>{mutation.isPending ? <Spinner className="h-4 w-4" /> : <><UserPlus /> Create client</>}</Button>
+                <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+                <Button type="submit" disabled={mutation.isPending}>{mutation.isPending ? <Spinner className="h-4 w-4" /> : isEdit ? 'Save changes' : <><UserPlus /> Create client</>}</Button>
               </DialogFooter>
             </form>
           </>

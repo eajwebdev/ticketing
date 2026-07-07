@@ -37,10 +37,21 @@ class TicketService
     /**
      * Team members who may be @mentioned on this ticket = agents/admins currently assigned.
      */
+    /**
+     * Who a team member may @mention on this ticket:
+     *  - the assigned agents/admins, and
+     *  - the client who submitted the ticket (so we can loop them in directly).
+     */
     public function mentionableUsers(Ticket $ticket)
     {
-        return $ticket->assignees()
+        $team = $ticket->assignees()
             ->whereIn('role', ['agent', 'admin'])
             ->get();
+
+        $customer = $ticket->customer()->first();
+
+        return $customer
+            ? $team->push($customer)->unique('id')->values()
+            : $team;
     }
 }

@@ -67,11 +67,16 @@ class MessageController extends Controller
                 ]);
             }
 
-            // Mentions — only team members who are assignees on this ticket.
+            // Mentions — team may mention assignees and the ticket's client.
             $mentionIds = collect($request->input('mentions', []))->unique();
             if ($user->isTeam() && $mentionIds->isNotEmpty()) {
-                $eligible = $this->service->mentionableUsers($ticket)->pluck('id');
-                foreach ($mentionIds->intersect($eligible) as $mid) {
+                $eligible = $this->service->mentionableUsers($ticket);
+                // On internal notes, never mention the client (they can't see them).
+                if ($isInternal) {
+                    $eligible = $eligible->filter(fn ($u) => $u->isTeam());
+                }
+                $eligibleIds = $eligible->pluck('id');
+                foreach ($mentionIds->intersect($eligibleIds) as $mid) {
                     $message->mentions()->create(['mentioned_user_id' => $mid]);
                 }
             }

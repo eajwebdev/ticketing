@@ -19,6 +19,8 @@ export function setToken(token) {
 api.interceptors.request.use((config) => {
   const token = getToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
+  // Let the server exclude our own socket from broadcasts (toOthers()).
+  if (window.__eajSocketId) config.headers['X-Socket-ID'] = window.__eajSocketId;
   return config;
 });
 

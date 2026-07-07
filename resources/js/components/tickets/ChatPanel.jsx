@@ -168,16 +168,23 @@ export function ChatPanel({ ticket }) {
         <div className="relative border-t border-navy-600/60 p-3">
           {/* Mention autocomplete */}
           {filteredMentions.length > 0 && (
-            <div className="absolute bottom-full left-3 mb-2 w-64 overflow-hidden rounded-xl glass-strong shadow-2xl">
-              <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Mention teammate</div>
-              {filteredMentions.map((m) => (
-                <button key={m.id} onClick={() => insertMention(m)}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-navy-700">
-                  <UserAvatar user={m} className="h-6 w-6" />
-                  <span className="text-mist">{m.name}</span>
-                  <span className="ml-auto text-xs text-muted-foreground">{m.position}</span>
-                </button>
-              ))}
+            <div className="absolute bottom-full left-3 mb-2 w-72 overflow-hidden rounded-xl glass-strong shadow-2xl">
+              <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Mention someone on this ticket</div>
+              {filteredMentions.map((m) => {
+                const isClient = m.role === 'customer';
+                return (
+                  <button key={m.id} onClick={() => insertMention(m)}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-navy-700">
+                    <UserAvatar user={m} className="h-6 w-6" />
+                    <span className="text-mist">{m.name}</span>
+                    {isClient ? (
+                      <span className="ml-auto rounded-full bg-crimson/15 px-2 py-0.5 text-[10px] font-medium text-crimson-soft">Client</span>
+                    ) : (
+                      <span className="ml-auto truncate text-xs text-muted-foreground">{m.position}</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
 
