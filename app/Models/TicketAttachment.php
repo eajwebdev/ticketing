@@ -8,9 +8,12 @@ use Illuminate\Support\Facades\Storage;
 
 class TicketAttachment extends Model
 {
-    protected $fillable = ['ticket_id', 'message_id', 'user_id', 'path', 'original_name', 'mime_type', 'size'];
+    protected $fillable = ['ticket_id', 'message_id', 'user_id', 'path', 'token', 'data', 'original_name', 'mime_type', 'size'];
 
     protected $appends = ['url', 'is_image'];
+
+    // Never serialize raw file bytes into API responses.
+    protected $hidden = ['data'];
 
     public function ticket(): BelongsTo
     {
@@ -29,7 +32,12 @@ class TicketAttachment extends Model
 
     public function getUrlAttribute(): string
     {
-        return Storage::url($this->path);
+        // DB-stored blob served via tokenized route; legacy rows fall back to disk URL.
+        if ($this->token) {
+            return "/files/{$this->id}/{$this->token}";
+        }
+
+        return $this->path ? Storage::url($this->path) : '';
     }
 
     public function getIsImageAttribute(): bool

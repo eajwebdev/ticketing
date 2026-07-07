@@ -64,16 +64,25 @@ class MessageController extends Controller
                 'is_internal' => $isInternal,
             ]);
 
-            // Attachments
+            // Attachments — stored in the DB as compressed blobs (images are downscaled
+            // and re-encoded to JPEG, typically just tens of KB). No disk, no storage:link.
             foreach ((array) $request->file('attachments', []) as $file) {
-                $path = $file->store('attachments/'.$ticket->id, 'public');
+                $bytes = file_get_contents($file->getRealPath());
+                $mime = $file->getMimeType();
+                $name = $file->getClientOriginalName();
+
+                if (str_starts_with((string) $mime, 'image/')) {
+                    [$bytes, $mime, $name] = $this->compressImage($bytes, $mime, $name);
+                }
+
                 $ticket->attachments()->create([
                     'message_id' => $message->id,
                     'user_id' => $user->id,
-                    'path' => $path,
-                    'original_name' => $file->getClientOriginalName(),
-                    'mime_type' => $file->getMimeType(),
-                    'size' => $file->getSize(),
+                    'token' => \Illuminate\Support\Str::random(48),
+                    'data' => $bytes,
+                    'original_name' => $name,
+                    'mime_type' => $mime,
+                    'size' => strlen($bytes),
                 ]);
             }
 
@@ -130,6 +139,61 @@ class MessageController extends Controller
                 continue;
             }
             $participant->notify(new TicketNotification('message', $ticket, $user, ['message_id' => $message->id]));
+        }
+    }
+
+    /**
+     * Downscale to max 1400px and re-encode as JPEG (q72) so chat images stay
+     * kilobyte-sized in the database. Animated GIFs are kept as-is.
+     */
+    private function compressImage(string $bytes, ?string $mime, string $name): array
+    {
+        if ($mime === 'image/gif' || ! extension_loaded('gd')) {
+            return [$bytes, $mime, $name];
+        }
+
+        try {
+            $src = @imagecreatefromstring($bytes);
+            if (! $src) {
+                return [$bytes, $mime, $name];
+            }
+
+            $w = imagesx($src);
+            $h = imagesy($src);
+            $max = 1400;
+
+            if ($w > $max || $h > $max) {
+                $scale = min($max / $w, $max / $h);
+                $nw = (int) round($w * $scale);
+                $nh = (int) round($h * $scale);
+                $dst = imagecreatetruecolor($nw, $nh);
+                // Flatten transparency onto white for JPEG output.
+                $white = imagecolorallocate($dst, 255, 255, 255);
+                imagefill($dst, 0, 0, $white);
+                imagecopyresampled($dst, $src, 0, 0, 0, 0, $nw, $nh, $w, $h);
+                imagedestroy($src);
+                $src = $dst;
+            }
+
+            ob_start();
+            imagejpeg($src, null, 72);
+            $out = ob_get_clean();
+            imagedestroy($src);
+
+            if ($out === false || $out === '') {
+                return [$bytes, $mime, $name];
+            }
+
+            // Only keep the re-encode when it actually saves space.
+            if (strlen($out) >= strlen($bytes)) {
+                return [$bytes, $mime, $name];
+            }
+
+            $newName = preg_replace('/\.[^.]+$/', '', $name).'.jpg';
+
+            return [$out, 'image/jpeg', $newName];
+        } catch (\Throwable) {
+            return [$bytes, $mime, $name];
         }
     }
 
