@@ -16,6 +16,7 @@ class StoreMessageRequest extends FormRequest
         return [
             'body' => ['nullable', 'string', 'required_without:attachments'],
             'is_internal' => ['nullable', 'boolean'],
+            'reply_to_id' => ['nullable', 'integer', 'exists:ticket_messages,id'],
             'mentions' => ['nullable', 'array'],
             'mentions.*' => ['integer', 'exists:users,id'],
             'attachments' => ['nullable', 'array', 'max:6'],

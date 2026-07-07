@@ -8,9 +8,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TicketMessage extends Model
 {
-    protected $fillable = ['ticket_id', 'user_id', 'body', 'is_internal'];
+    protected $fillable = ['ticket_id', 'user_id', 'reply_to_id', 'body', 'is_internal'];
 
     protected $casts = ['is_internal' => 'boolean'];
+
+    public function replyTo(): BelongsTo
+    {
+        return $this->belongsTo(TicketMessage::class, 'reply_to_id');
+    }
 
     public function ticket(): BelongsTo
     {

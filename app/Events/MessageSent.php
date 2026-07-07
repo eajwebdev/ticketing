@@ -17,7 +17,7 @@ class MessageSent implements ShouldBroadcastNow
 
     public function __construct(public TicketMessage $message)
     {
-        $this->message->loadMissing(['user', 'attachments', 'mentions.mentionedUser']);
+        $this->message->loadMissing(['user', 'attachments', 'mentions.mentionedUser', 'replyTo.user']);
     }
 
     public function broadcastOn(): array
@@ -32,8 +32,13 @@ class MessageSent implements ShouldBroadcastNow
 
     public function broadcastWith(): array
     {
-        return [
-            'message' => (new MessageResource($this->message))->resolve(),
-        ];
+        $payload = (new MessageResource($this->message))->resolve();
+
+        // The presence channel includes the customer — never leak internal-note quotes.
+        if (($payload['reply_to']['is_internal'] ?? false) === true) {
+            $payload['reply_to'] = null;
+        }
+
+        return ['message' => $payload];
     }
 }

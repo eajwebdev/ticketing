@@ -27,7 +27,11 @@ class UserTyping implements ShouldBroadcastNow
     public function broadcastWith(): array
     {
         return [
-            'user' => ['id' => $this->user->id, 'name' => $this->user->name],
+            'user' => [
+                'id' => $this->user->id,
+                'name' => $this->user->name,
+                'avatar_url' => $this->user->avatar_url,
+            ],
         ];
     }
 }

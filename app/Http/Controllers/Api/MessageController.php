@@ -24,7 +24,7 @@ class MessageController extends Controller
         $this->authorize('view', $ticket);
 
         $query = $ticket->messages()
-            ->with(['user', 'attachments', 'mentions.mentionedUser'])
+            ->with(['user', 'attachments', 'mentions.mentionedUser', 'replyTo.user'])
             ->orderBy('created_at');
 
         // Customers never see internal notes.
@@ -47,9 +47,19 @@ class MessageController extends Controller
             $isInternal = false;
         }
 
-        $message = DB::transaction(function () use ($request, $ticket, $user, $isInternal) {
+        // Quoted reply — must belong to this ticket; customers can't quote internal notes.
+        $replyToId = $request->input('reply_to_id');
+        if ($replyToId) {
+            $target = TicketMessage::find($replyToId);
+            if (! $target || $target->ticket_id !== $ticket->id || ($target->is_internal && ! $user->isTeam())) {
+                $replyToId = null;
+            }
+        }
+
+        $message = DB::transaction(function () use ($request, $ticket, $user, $isInternal, $replyToId) {
             $message = $ticket->messages()->create([
                 'user_id' => $user->id,
+                'reply_to_id' => $replyToId,
                 'body' => $request->input('body'),
                 'is_internal' => $isInternal,
             ]);
@@ -89,7 +99,7 @@ class MessageController extends Controller
             return $message;
         });
 
-        $message->load(['user', 'attachments', 'mentions.mentionedUser']);
+        $message->load(['user', 'attachments', 'mentions.mentionedUser', 'replyTo.user']);
 
         broadcast(new MessageSent($message))->toOthers();
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Send, Paperclip, X, Lock, AtSign, ImageIcon } from 'lucide-react';
+import { Send, Paperclip, X, Lock, AtSign, ImageIcon, Reply } from 'lucide-react';
 import api from '@/lib/api';
 import { getEcho } from '@/lib/echo';
 import { useAuth } from '@/context/AuthContext';
@@ -30,11 +30,15 @@ export function ChatPanel({ ticket }) {
   const [pickedMentions, setPickedMentions] = useState([]);
   const [connected, setConnected] = useState(false);
   const [online, setOnline] = useState([]);
+  const [replyTo, setReplyTo] = useState(null);
+  const [highlightId, setHighlightId] = useState(null);
 
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
   const typingTimeout = useRef(null);
   const textareaRef = useRef(null);
+  const msgRefs = useRef({});
+  const typingTimers = useRef({});
 
   useEffect(() => { if (initialMessages) setMessages(initialMessages); }, [initialMessages]);
 
@@ -44,6 +48,8 @@ export function ChatPanel({ ticket }) {
     });
   }, []);
   useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
+  // Reveal the typing bubble when it appears.
+  useEffect(() => { if (typingUsers.length) scrollToBottom(); }, [typingUsers, scrollToBottom]);
 
   // Mentionable list (team only)
   useEffect(() => {
@@ -75,7 +81,12 @@ export function ChatPanel({ ticket }) {
         .listen('.user.typing', (e) => {
           if (e.user.id === user.id) return;
           setTypingUsers((prev) => (prev.find((u) => u.id === e.user.id) ? prev : [...prev, e.user]));
-          setTimeout(() => setTypingUsers((prev) => prev.filter((u) => u.id !== e.user.id)), 2500);
+          // Messenger-style: reset this user's hide-timer on every keystroke event,
+          // so the bubble stays up while they keep typing.
+          clearTimeout(typingTimers.current[e.user.id]);
+          typingTimers.current[e.user.id] = setTimeout(() => {
+            setTypingUsers((prev) => prev.filter((u) => u.id !== e.user.id));
+          }, 3000);
         })
         .listen('.ticket.updated', () => {
           queryClient.invalidateQueries({ queryKey: ['ticket', String(ticket.id)] });
@@ -142,6 +153,7 @@ export function ChatPanel({ ticket }) {
     const fd = new FormData();
     if (body.trim()) fd.append('body', body.trim());
     if (isInternal) fd.append('is_internal', '1');
+    if (replyTo) fd.append('reply_to_id', replyTo.id);
     pickedMentions.forEach((id) => fd.append('mentions[]', id));
     files.forEach((f) => fd.append('attachments[]', f));
     try {
@@ -149,12 +161,21 @@ export function ChatPanel({ ticket }) {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       setMessages((prev) => [...prev, data.data]);
-      setBody(''); setFiles([]); setPickedMentions([]); setIsInternal(false);
+      setBody(''); setFiles([]); setPickedMentions([]); setIsInternal(false); setReplyTo(null);
     } catch {
       /* toast handled globally */
     } finally {
       setSending(false);
     }
+  };
+
+  // Click a quote -> jump to the original message and flash it.
+  const jumpToMessage = (id) => {
+    const el = msgRefs.current[id];
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setHighlightId(id);
+    setTimeout(() => setHighlightId(null), 1400);
   };
 
   const filteredMentions = mentionQuery != null
@@ -205,18 +226,36 @@ export function ChatPanel({ ticket }) {
             <p className="text-sm">No messages yet. Start the conversation.</p>
           </div>
         ) : (
-          messages.map((m) => <MessageBubble key={m.id} message={m} isOwn={m.user?.id === user.id} />)
+          messages.map((m) => (
+            <MessageBubble
+              key={m.id}
+              message={m}
+              isOwn={m.user?.id === user.id}
+              onReply={() => { setReplyTo(m); textareaRef.current?.focus(); }}
+              onQuoteClick={jumpToMessage}
+              registerRef={(el) => { msgRefs.current[m.id] = el; }}
+              highlighted={highlightId === m.id}
+            />
+          ))
         )}
-        {typingUsers.length > 0 && (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="flex gap-1">
-              {[0, 1, 2].map((i) => (
-                <span key={i} className="h-1.5 w-1.5 animate-bounce rounded-full bg-crimson-soft" style={{ animationDelay: `${i * 0.15}s` }} />
-              ))}
-            </span>
-            {typingUsers.map((u) => u.name.split(' ')[0]).join(', ')} typing…
+        {/* Messenger-style typing bubble */}
+        {typingUsers.map((u) => (
+          <div key={`typing-${u.id}`} className="flex items-end gap-3">
+            <UserAvatar user={u} className="h-8 w-8 shrink-0" />
+            <div>
+              <div className="text-[10px] text-muted-foreground">{u.name.split(' ')[0]} is typing…</div>
+              <div className="mt-1 inline-flex items-center gap-1.5 rounded-2xl rounded-bl-md bg-navy-700 px-4 py-3">
+                {[0, 1, 2].map((i) => (
+                  <span
+                    key={i}
+                    className="h-2 w-2 animate-bounce rounded-full bg-mist/60"
+                    style={{ animationDelay: `${i * 0.15}s`, animationDuration: '0.9s' }}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
-        )}
+        ))}
       </div>
 
       {/* Composer */}
@@ -266,6 +305,24 @@ export function ChatPanel({ ticket }) {
             </div>
           )}
 
+          {/* Replying-to bar (Messenger style) */}
+          {replyTo && (
+            <div className="mb-2 flex items-center gap-2 rounded-xl border-l-2 border-crimson bg-navy-800/70 px-3 py-2">
+              <Reply className="h-3.5 w-3.5 shrink-0 text-crimson-soft" />
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] font-semibold text-crimson-soft">
+                  Replying to {replyTo.user?.name?.split(' ')[0] ?? 'message'}
+                </div>
+                <div className="truncate text-xs text-muted-foreground">
+                  {replyTo.body || '📎 Attachment'}
+                </div>
+              </div>
+              <button onClick={() => setReplyTo(null)} className="rounded-md p-1 text-muted-foreground hover:text-crimson-soft" aria-label="Cancel reply">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+
           {isInternal && (
             <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-1 text-xs text-amber-400">
               <Lock className="h-3 w-3" /> Internal note — the customer won't see this
@@ -305,10 +362,10 @@ export function ChatPanel({ ticket }) {
   );
 }
 
-function MessageBubble({ message, isOwn }) {
+function MessageBubble({ message, isOwn, onReply, onQuoteClick, registerRef, highlighted }) {
   const internal = message.is_internal;
   return (
-    <div className={cn('flex gap-3', isOwn && 'flex-row-reverse')}>
+    <div ref={registerRef} className={cn('group flex gap-3', isOwn && 'flex-row-reverse')}>
       <UserAvatar user={message.user} className="h-8 w-8 shrink-0" />
       <div className={cn('max-w-[75%] min-w-0', isOwn && 'items-end')}>
         <div className={cn('flex items-center gap-2', isOwn && 'flex-row-reverse')}>
@@ -319,14 +376,31 @@ function MessageBubble({ message, isOwn }) {
         </div>
         <div
           className={cn(
-            'mt-1 rounded-2xl px-4 py-2.5 text-sm',
+            'mt-1 rounded-2xl px-4 py-2.5 text-sm transition-shadow',
             internal
               ? 'border border-amber-500/30 bg-amber-500/10 text-amber-100'
               : isOwn
                 ? 'bg-crimson text-white'
-                : 'bg-navy-700 text-mist'
+                : 'bg-navy-700 text-mist',
+            highlighted && 'ring-2 ring-crimson-soft shadow-[0_0_20px_rgba(255,77,117,0.45)]'
           )}
         >
+          {/* Quoted reply */}
+          {message.reply_to && (
+            <button
+              type="button"
+              onClick={() => onQuoteClick?.(message.reply_to.id)}
+              className={cn(
+                'mb-2 block w-full rounded-lg border-l-2 px-2.5 py-1.5 text-left text-xs transition-opacity hover:opacity-80',
+                isOwn && !internal ? 'border-white/60 bg-white/15 text-white/90' : 'border-crimson bg-navy-800/70 text-mist/80'
+              )}
+            >
+              <span className={cn('block text-[10px] font-semibold', isOwn && !internal ? 'text-white' : 'text-crimson-soft')}>
+                <Reply className="mr-1 inline h-2.5 w-2.5" />{message.reply_to.user?.name ?? 'Message'}
+              </span>
+              <span className="line-clamp-2">{message.reply_to.body}</span>
+            </button>
+          )}
           {internal && <div className="mb-1 inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-amber-400"><Lock className="h-2.5 w-2.5" /> Internal</div>}
           {message.body && <p className="whitespace-pre-wrap break-words">{renderMentions(message.body)}</p>}
           {message.attachments?.length > 0 && (
@@ -346,6 +420,22 @@ function MessageBubble({ message, isOwn }) {
           )}
         </div>
       </div>
+
+      {/* Hover action: reply (Messenger style) */}
+      {onReply && (
+        <div className={cn('flex items-center self-center opacity-0 transition-opacity group-hover:opacity-100')}>
+          <Tooltip label="Reply">
+            <button
+              type="button"
+              onClick={onReply}
+              className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-navy-700 hover:text-crimson-soft"
+              aria-label="Reply to this message"
+            >
+              <Reply className="h-4 w-4" />
+            </button>
+          </Tooltip>
+        </div>
+      )}
     </div>
   );
 }
