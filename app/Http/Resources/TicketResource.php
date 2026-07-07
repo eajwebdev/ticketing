@@ -26,6 +26,8 @@ class TicketResource extends JsonResource
             'resolved_at' => $this->resolved_at,
             'closed_at' => $this->closed_at,
             'first_response_at' => $this->first_response_at,
+            'expected_resolution_at' => $this->expected_resolution_at,
+            'activities' => ActivityResource::collection($this->whenLoaded('activities')),
             'response_time_minutes' => $this->response_time_minutes,
             'resolution_time_minutes' => $this->resolution_time_minutes,
             'messages_count' => $this->whenCounted('messages'),

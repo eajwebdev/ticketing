@@ -49,6 +49,7 @@ Route::prefix('v1')->group(function () {
         Route::post('tickets/{ticket}/accept', [TicketController::class, 'accept']);
         Route::post('tickets/{ticket}/resolve', [TicketController::class, 'resolve']);
         Route::post('tickets/{ticket}/reopen', [TicketController::class, 'reopen']);
+        Route::post('tickets/{ticket}/eta', [TicketController::class, 'setEta']);
 
         // Collaborators
         Route::post('tickets/{ticket}/assignees', [AssigneeController::class, 'store']);

@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft, Check, RotateCcw, UserPlus, X, Clock, Zap, CheckCircle2,
-  Layers, Tag, Activity, Users, ShieldCheck,
+  Layers, Tag, Activity, Users, ShieldCheck, CalendarClock, MessageSquare, Info,
 } from 'lucide-react';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
@@ -22,8 +22,10 @@ import {
   AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
 import {
-  Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { STATUS_META, dateTime, fromNow, humanizeMinutes } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -33,6 +35,8 @@ export default function TicketDetail() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { data: ticket, isLoading, isError } = useTicket(id);
+  // Mobile: Messenger-style — chat fills the screen, info lives in its own tab.
+  const [mobileTab, setMobileTab] = useState('chat');
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['ticket', id] });
@@ -86,11 +90,14 @@ export default function TicketDetail() {
             </Tooltip>
           )}
           {canResolve && (
-            <Tooltip label="Mark resolved">
-              <Button size="sm" variant="secondary" onClick={() => action.mutate({ verb: 'resolve' })} disabled={action.isPending}>
-                <CheckCircle2 /> Resolve
-              </Button>
-            </Tooltip>
+            <>
+              <EtaDialog ticket={ticket} onSaved={invalidate} />
+              <Tooltip label="Mark resolved">
+                <Button size="sm" variant="secondary" onClick={() => action.mutate({ verb: 'resolve' })} disabled={action.isPending}>
+                  <CheckCircle2 /> Resolve
+                </Button>
+              </Tooltip>
+            </>
           )}
           {canReopen && (
             <ReopenButton onConfirm={() => action.mutate({ verb: 'reopen' })} />
@@ -98,20 +105,118 @@ export default function TicketDetail() {
         </div>
       </div>
 
+      {/* Mobile tab switch: chat stays full-screen like a messenger; info is one tap away. */}
+      <div className="flex gap-1 rounded-xl bg-navy-800/60 p-1 border border-navy-600 lg:hidden">
+        {[
+          { key: 'chat', icon: MessageSquare, label: 'Chat' },
+          { key: 'info', icon: Info, label: 'Details & Timeline' },
+        ].map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setMobileTab(t.key)}
+            className={cn(
+              'flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all',
+              mobileTab === t.key
+                ? 'bg-crimson text-white shadow-[0_0_16px_rgba(233,30,79,0.35)]'
+                : 'text-muted-foreground hover:text-mist'
+            )}
+          >
+            <t.icon className="h-4 w-4" /> {t.label}
+          </button>
+        ))}
+      </div>
+
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-        {/* Chat */}
-        <div className="lg:col-span-2">
+        {/* Chat — kept mounted on mobile even when Info tab is open (websocket stays live) */}
+        <div className={cn('lg:col-span-2', mobileTab !== 'chat' && 'hidden lg:block')}>
           <ChatPanel ticket={ticket} />
         </div>
 
         {/* Sidebar */}
-        <div className="space-y-5">
+        <div className={cn('space-y-5', mobileTab !== 'info' && 'hidden lg:block')}>
           <DetailsCard ticket={ticket} />
           <CollaboratorsCard ticket={ticket} canManage={canManage} onChange={invalidate} />
           <TimelineCard ticket={ticket} />
         </div>
       </div>
     </div>
+  );
+}
+
+function EtaDialog({ ticket, onSaved }) {
+  const [open, setOpen] = useState(false);
+  const [custom, setCustom] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const save = async (date) => {
+    setSaving(true);
+    try {
+      await api.post(`/tickets/${ticket.id}/eta`, { expected_resolution_at: date });
+      toast.success('Expected fix date set — the client has been notified.');
+      onSaved();
+      setOpen(false);
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Could not set the timeline.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const preset = (days, label) => {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    d.setHours(17, 0, 0, 0); // end of business day
+    return { label, date: d };
+  };
+
+  const presets = [
+    preset(0, 'Today (5 PM)'),
+    preset(1, 'Tomorrow'),
+    preset(2, 'In 2 days'),
+    preset(3, 'In 3 days'),
+    preset(7, 'In 1 week'),
+  ].filter((p) => p.date > new Date());
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline">
+          <CalendarClock /> {ticket.expected_resolution_at ? 'Update timeline' : 'Set timeline'}
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>When will this be fixed?</DialogTitle>
+          <DialogDescription>
+            The client sees this on the ticket and gets notified — great for requests that take a few days.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-wrap gap-2">
+          {presets.map((p) => (
+            <button
+              key={p.label}
+              disabled={saving}
+              onClick={() => save(p.date.toISOString())}
+              className="rounded-full border border-navy-600 bg-navy-700/60 px-3.5 py-1.5 text-xs font-medium text-mist/80 transition-colors hover:border-crimson/50 hover:text-white disabled:opacity-50"
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <div className="space-y-2 border-t border-navy-600/60 pt-4">
+          <Label>Or pick an exact date & time</Label>
+          <Input type="datetime-local" value={custom} onChange={(e) => setCustom(e.target.value)} />
+        </div>
+        <DialogFooter>
+          <Button
+            disabled={!custom || saving}
+            onClick={() => save(new Date(custom).toISOString())}
+          >
+            {saving ? 'Saving…' : 'Set expected fix date'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -158,6 +263,18 @@ function DetailsCard({ ticket }) {
           <span className="text-mist">{ticket.customer?.store_name || ticket.customer?.name}</span>
         </div>
       </div>
+
+      {/* Expected fix date — the promise made to the client */}
+      {ticket.expected_resolution_at && !ticket.resolved_at && (
+        <div className="mt-4 flex items-center gap-3 rounded-xl border border-crimson/25 bg-crimson/5 p-3">
+          <div className="rounded-lg bg-crimson/15 p-2 text-crimson-soft"><CalendarClock className="h-4 w-4" /></div>
+          <div>
+            <div className="text-xs text-muted-foreground">Expected fix by</div>
+            <div className="text-sm font-semibold text-mist">{dateTime(ticket.expected_resolution_at)}</div>
+            <div className="text-[11px] text-crimson-soft">{fromNow(ticket.expected_resolution_at)}</div>
+          </div>
+        </div>
+      )}
 
       {/* Time metrics */}
       <div className="mt-4 grid grid-cols-2 gap-2 border-t border-navy-600/60 pt-4">
@@ -269,6 +386,7 @@ function TimelineCard({ ticket }) {
     created: 'created the ticket', accepted: 'accepted the ticket', resolved: 'marked as resolved',
     reopened: 'reopened the ticket', collaborator_added: 'added a collaborator',
     collaborator_removed: 'removed a collaborator', updated: 'updated the ticket',
+    eta_set: 'set the expected fix date',
   };
   return (
     <div className="rounded-2xl glass p-5">
@@ -287,6 +405,9 @@ function TimelineCard({ ticket }) {
                 <p className="text-sm text-mist">
                   <span className="font-medium">{a.user?.name ?? 'System'}</span>{' '}
                   <span className="text-muted-foreground">{LABELS[a.action] ?? a.action}</span>
+                  {a.action === 'eta_set' && a.meta?.expected_resolution_at && (
+                    <span className="text-crimson-soft"> — {dateTime(a.meta.expected_resolution_at)}</span>
+                  )}
                 </p>
                 <Tooltip label={dateTime(a.created_at)}>
                   <span className="text-[11px] text-muted-foreground">{fromNow(a.created_at)}</span>

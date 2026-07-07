@@ -178,6 +178,33 @@ class TicketController extends Controller
         return new TicketResource($ticket->fresh(['resolvedBy']));
     }
 
+    /**
+     * The assignee (or admin) commits to an expected fix date — shown to the client.
+     */
+    public function setEta(Request $request, Ticket $ticket)
+    {
+        $this->authorize('manageAssignees', $ticket);
+
+        $data = $request->validate([
+            'expected_resolution_at' => ['required', 'date', 'after:now'],
+        ]);
+
+        $ticket->update(['expected_resolution_at' => $data['expected_resolution_at']]);
+
+        $this->service->logActivity($ticket, $request->user(), 'eta_set', [
+            'expected_resolution_at' => $ticket->expected_resolution_at->toIso8601String(),
+        ]);
+
+        broadcast(new TicketUpdated($ticket->fresh(), 'eta'));
+
+        // Let the client know when to expect the fix.
+        $ticket->customer->notify(new TicketNotification('eta', $ticket, $request->user(), [
+            'expected_resolution_at' => $ticket->expected_resolution_at->toIso8601String(),
+        ]));
+
+        return new TicketResource($ticket->fresh(['activities' => fn ($q) => $q->with('user')->latest()]));
+    }
+
     public function reopen(Request $request, Ticket $ticket)
     {
         $this->authorize('reopen', $ticket);

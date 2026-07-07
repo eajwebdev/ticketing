@@ -64,6 +64,7 @@ class TicketNotification extends Notification
             'assignment' => "{$actor} added you as a collaborator on {$num}",
             'message' => "New message on {$num}",
             'status' => "{$num} was marked ".($this->extra['status'] ?? 'updated'),
+            'eta' => "{$actor} set an expected fix date for {$num}",
             default => "Update on {$num}",
         };
     }

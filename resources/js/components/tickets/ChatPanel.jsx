@@ -28,6 +28,8 @@ export function ChatPanel({ ticket }) {
   const [mentionQuery, setMentionQuery] = useState(null);
   const [mentionable, setMentionable] = useState([]);
   const [pickedMentions, setPickedMentions] = useState([]);
+  const [connected, setConnected] = useState(false);
+  const [online, setOnline] = useState([]);
 
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -50,12 +52,23 @@ export function ChatPanel({ ticket }) {
     }
   }, [ticket.id, isTeam]);
 
-  // Realtime
+  // Realtime: presence channel — live messages, typing, who's online, ticket updates.
   useEffect(() => {
-    let channel;
+    let pusherConn;
+    const onStateChange = ({ current }) => setConnected(current === 'connected');
+
     try {
       const echo = getEcho();
-      channel = echo.join(`ticket.${ticket.id}`)
+
+      // Track raw WebSocket connection state (drives the Live badge + polling fallback).
+      pusherConn = echo.connector.pusher.connection;
+      setConnected(pusherConn.state === 'connected');
+      pusherConn.bind('state_change', onStateChange);
+
+      echo.join(`ticket.${ticket.id}`)
+        .here((users) => setOnline(users))
+        .joining((joined) => setOnline((prev) => (prev.some((u) => u.id === joined.id) ? prev : [...prev, joined])))
+        .leaving((left) => setOnline((prev) => prev.filter((u) => u.id !== left.id)))
         .listen('.message.sent', (e) => {
           setMessages((prev) => (prev.some((m) => m.id === e.message.id) ? prev : [...prev, e.message]));
         })
@@ -71,9 +84,22 @@ export function ChatPanel({ ticket }) {
       console.warn('Realtime chat unavailable', e);
     }
     return () => {
-      try { getEcho().leave(`ticket.${ticket.id}`); } catch { /* ignore */ }
+      try {
+        pusherConn?.unbind('state_change', onStateChange);
+        getEcho().leave(`ticket.${ticket.id}`);
+      } catch { /* ignore */ }
     };
   }, [ticket.id, user.id, queryClient]);
+
+  // Fallback: if the WebSocket is down, poll for new messages every 4s so the
+  // conversation still updates without a page refresh.
+  useEffect(() => {
+    if (connected) return;
+    const interval = setInterval(() => {
+      queryClient.invalidateQueries({ queryKey: ['messages', ticket.id] });
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [connected, ticket.id, queryClient]);
 
   const broadcastTyping = () => {
     if (typingTimeout.current) return;
@@ -138,7 +164,37 @@ export function ChatPanel({ ticket }) {
   const canChat = ['open', 'accepted', 'reopened', 'resolved'].includes(ticket.status);
 
   return (
-    <div className="flex h-[calc(100vh-13rem)] min-h-[420px] flex-col rounded-2xl glass">
+    <div className="flex h-[calc(100dvh-17rem)] min-h-[420px] flex-col rounded-2xl glass lg:h-[calc(100vh-13rem)]">
+      {/* Live status header */}
+      <div className="flex items-center justify-between border-b border-navy-600/60 px-4 py-2.5">
+        <div className="flex items-center gap-2">
+          <span className="relative flex h-2 w-2">
+            {connected && (
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+            )}
+            <span className={cn('relative inline-flex h-2 w-2 rounded-full', connected ? 'bg-emerald-400' : 'bg-amber-400')} />
+          </span>
+          <span className="text-xs font-medium text-mist/80">
+            {connected ? 'Live chat' : 'Reconnecting — updates every few seconds'}
+          </span>
+        </div>
+        {online.length > 0 && (
+          <div className="flex items-center gap-2">
+            <div className="flex -space-x-2">
+              {online.slice(0, 5).map((u) => (
+                <Tooltip key={u.id} label={`${u.name}${u.id === user.id ? ' (you)' : ''} — online`}>
+                  <span className="relative">
+                    <UserAvatar user={u} className="h-6 w-6 ring-2 ring-navy-800" />
+                    <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-navy-800" />
+                  </span>
+                </Tooltip>
+              ))}
+            </div>
+            <span className="text-[11px] text-muted-foreground">{online.length} online</span>
+          </div>
+        )}
+      </div>
+
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto p-5">
         {isLoading ? (

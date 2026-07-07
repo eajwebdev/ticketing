@@ -13,7 +13,7 @@ class Ticket extends Model
     protected $fillable = [
         'ticket_number', 'customer_id', 'system_type_id', 'category_id', 'urgency_id',
         'subject', 'description', 'status', 'accepted_by', 'resolved_by',
-        'accepted_at', 'resolved_at', 'closed_at', 'first_response_at',
+        'accepted_at', 'resolved_at', 'closed_at', 'first_response_at', 'expected_resolution_at',
     ];
 
     protected $casts = [
@@ -22,6 +22,7 @@ class Ticket extends Model
         'resolved_at' => 'datetime',
         'closed_at' => 'datetime',
         'first_response_at' => 'datetime',
+        'expected_resolution_at' => 'datetime',
     ];
 
     protected $appends = ['response_time_minutes', 'resolution_time_minutes'];
