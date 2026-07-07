@@ -32,8 +32,6 @@ export default function Login() {
     }
   };
 
-  const fill = (email) => setForm({ email, password: 'password' });
-
   return (
     <AuthShell
       title="Welcome back"
@@ -56,22 +54,6 @@ export default function Login() {
           {loading ? <Spinner className="h-4 w-4" /> : <><LogIn /> Sign in</>}
         </Button>
       </form>
-
-      <div className="mt-6 rounded-xl border border-navy-600 bg-navy-800/40 p-3">
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Demo accounts (password: password)</p>
-        <div className="flex flex-wrap gap-1.5">
-          {[
-            ['Admin', 'admin@eaj.test'],
-            ['Agent', 'marco@eaj.test'],
-            ['Client', 'jomar@store.test'],
-          ].map(([label, email]) => (
-            <button key={email} type="button" onClick={() => fill(email)}
-              className="rounded-lg border border-navy-600 bg-navy-700/60 px-2.5 py-1 text-xs text-mist/80 transition-colors hover:border-crimson/50 hover:text-white">
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
     </AuthShell>
   );
 }
