@@ -25,6 +25,13 @@ class UserResource extends JsonResource
             'contact_person' => $this->contact_person,
             'notes' => $this->when($request->user()?->isTeam(), $this->notes),
             'is_active' => $this->is_active,
+            'role_label' => $this->role->label(),
+            // Effective permissions — only revealed to the user themself or to settings managers.
+            'permissions' => $this->when(
+                $this->isTeam() && ($request->user()?->id === $this->id || $request->user()?->hasPermission(\App\Support\Permissions::SETTINGS)),
+                fn () => $this->permissionList()
+            ),
+            'has_custom_permissions' => $this->when($request->user()?->hasPermission(\App\Support\Permissions::SETTINGS) ?? false, fn () => $this->permissions !== null),
             'approval_status' => $this->approval_status,
             'is_primary' => $this->whenPivotLoaded('ticket_assignees', fn () => (bool) $this->pivot->is_primary),
             'created_at' => $this->created_at,

@@ -64,7 +64,7 @@ class ProfileController extends Controller
 
     public function team()
     {
-        $team = User::whereIn('role', ['agent', 'admin'])
+        $team = User::team()
             ->where('is_active', true)
             ->orderBy('name')
             ->get()

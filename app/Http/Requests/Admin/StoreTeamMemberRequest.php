@@ -9,7 +9,7 @@ class StoreTeamMemberRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->isAdmin() ?? false;
+        return $this->user()?->hasPermission(\App\Support\Permissions::SETTINGS) ?? false;
     }
 
     public function rules(): array
@@ -19,7 +19,7 @@ class StoreTeamMemberRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'.($id ? ",$id" : '')],
-            'role' => ['required', Rule::in(['agent', 'admin'])],
+            'role' => ['required', Rule::in(\App\Enums\Role::teamValues())],
             'position' => ['nullable', 'string', 'max:255'],
             'department' => ['nullable', 'string', 'max:255'],
             'bio' => ['nullable', 'string'],

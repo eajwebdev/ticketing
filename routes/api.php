@@ -2,6 +2,10 @@
 
 use App\Http\Controllers\Api\Admin\AnalyticsController;
 use App\Http\Controllers\Api\Admin\ClientController;
+use App\Http\Controllers\Api\Admin\ClientSystemController;
+use App\Http\Controllers\Api\Admin\SalesController;
+use App\Http\Controllers\Api\LeadController;
+use App\Http\Controllers\Api\TaskController;
 use App\Http\Controllers\Api\Admin\LookupCrudController;
 use App\Http\Controllers\Api\Admin\TeamController;
 use App\Http\Controllers\Api\Admin\UserManagementController;
@@ -44,6 +48,7 @@ Route::prefix('v1')->group(function () {
         // Tickets
         Route::get('tickets', [TicketController::class, 'index']);
         Route::post('tickets', [TicketController::class, 'store']);
+        Route::get('ticket-systems', [TicketController::class, 'systems']);
         Route::get('tickets/{ticket}', [TicketController::class, 'show']);
         Route::patch('tickets/{ticket}', [TicketController::class, 'update']);
         Route::post('tickets/{ticket}/accept', [TicketController::class, 'accept']);
@@ -66,7 +71,7 @@ Route::prefix('v1')->group(function () {
             abort_unless($request->user()->isTeam(), 403);
 
             return UserResource::collection(
-                User::whereIn('role', ['agent', 'admin'])->where('is_active', true)->orderBy('name')->get()
+                User::team()->where('is_active', true)->orderBy('name')->get()
             );
         });
 
@@ -75,30 +80,75 @@ Route::prefix('v1')->group(function () {
         Route::post('notifications/read-all', [NotificationController::class, 'readAll']);
         Route::post('notifications/{id}/read', [NotificationController::class, 'read']);
 
-        // Admin
-        Route::prefix('admin')->middleware('role:admin')->group(function () {
-            Route::get('clients', [ClientController::class, 'index']);
-            Route::post('clients', [ClientController::class, 'store']);
-            Route::post('clients/{user}/approve', [ClientController::class, 'approve']);
-            Route::post('clients/{user}/reject', [ClientController::class, 'reject']);
-            Route::patch('clients/{user}', [ClientController::class, 'update']);
-            Route::post('clients/{user}', [ClientController::class, 'update']);
+        // Tasks — every team member (controller checks ownership / tasks.manage)
+        Route::get('tasks', [TaskController::class, 'index']);
+        Route::post('tasks', [TaskController::class, 'store']);
+        Route::patch('tasks/{task}', [TaskController::class, 'update']);
+        Route::post('tasks/{task}/move', [TaskController::class, 'move']);
+        Route::delete('tasks/{task}', [TaskController::class, 'destroy']);
 
-            Route::get('team', [TeamController::class, 'index']);
-            Route::post('team', [TeamController::class, 'store']);
-            Route::patch('team/{user}', [TeamController::class, 'update']);
-            Route::post('team/{user}', [TeamController::class, 'update']);
+        // Leads pipeline
+        Route::middleware('perm:leads.manage')->group(function () {
+            Route::get('leads', [LeadController::class, 'index']);
+            Route::post('leads', [LeadController::class, 'store']);
+            Route::patch('leads/{lead}', [LeadController::class, 'update']);
+            Route::post('leads/{lead}/move', [LeadController::class, 'move']);
+            Route::post('leads/{lead}/convert', [LeadController::class, 'convert'])->middleware('perm:clients.manage');
+            Route::delete('leads/{lead}', [LeadController::class, 'destroy']);
+        });
 
-            Route::get('lookups/{type}', [LookupCrudController::class, 'index']);
-            Route::post('lookups/{type}', [LookupCrudController::class, 'store']);
-            Route::patch('lookups/{type}/{id}', [LookupCrudController::class, 'update']);
-            Route::delete('lookups/{type}/{id}', [LookupCrudController::class, 'destroy']);
+        Route::prefix('admin')->group(function () {
+            // Client systems: list for anyone with systems/credentials/billing access; money & edits need billing.
+            Route::get('client-systems', [ClientSystemController::class, 'index']);
+            Route::get('client-systems/{clientSystem}/credentials', [ClientSystemController::class, 'credentials'])
+                ->middleware('throttle:30,1');
 
-            Route::get('users', [UserManagementController::class, 'index']);
-            Route::patch('users/{user}', [UserManagementController::class, 'update']);
+            Route::middleware('perm:billing.manage')->group(function () {
+                Route::get('billing/overview', [ClientSystemController::class, 'overview']);
+                Route::post('client-systems', [ClientSystemController::class, 'store']);
+                Route::patch('client-systems/{clientSystem}', [ClientSystemController::class, 'update']);
+                Route::delete('client-systems/{clientSystem}', [ClientSystemController::class, 'destroy']);
+                Route::post('client-systems/{clientSystem}/pay', [ClientSystemController::class, 'pay']);
+                Route::get('client-systems/{clientSystem}/payments', [ClientSystemController::class, 'payments']);
 
-            Route::get('analytics', [AnalyticsController::class, 'index']);
-            Route::get('analytics/export', [AnalyticsController::class, 'export']);
+                Route::get('sales', [SalesController::class, 'index']);
+                Route::get('sales/export', [SalesController::class, 'export']);
+                Route::delete('sales/{payment}', [SalesController::class, 'destroy']);
+            });
+
+            // Client list is also needed by billing/leads/ticket staff to pick a client.
+            Route::get('clients', [ClientController::class, 'index'])
+                ->middleware('perm:clients.manage,billing.manage,tickets.handle,leads.manage');
+            Route::middleware('perm:clients.manage')->group(function () {
+                Route::post('clients', [ClientController::class, 'store']);
+                Route::post('clients/{user}/approve', [ClientController::class, 'approve']);
+                Route::post('clients/{user}/reject', [ClientController::class, 'reject']);
+                Route::patch('clients/{user}', [ClientController::class, 'update']);
+                Route::post('clients/{user}', [ClientController::class, 'update']);
+            });
+
+            Route::middleware('perm:analytics.view')->group(function () {
+                Route::get('analytics', [AnalyticsController::class, 'index']);
+                Route::get('analytics/export', [AnalyticsController::class, 'export']);
+            });
+
+            Route::middleware('perm:settings.manage')->group(function () {
+                Route::get('team', [TeamController::class, 'index']);
+                Route::post('team', [TeamController::class, 'store']);
+                Route::patch('team/{user}', [TeamController::class, 'update']);
+                Route::post('team/{user}', [TeamController::class, 'update']);
+
+                Route::get('lookups/{type}', [LookupCrudController::class, 'index']);
+                Route::post('lookups/{type}', [LookupCrudController::class, 'store']);
+                Route::patch('lookups/{type}/{id}', [LookupCrudController::class, 'update']);
+                Route::delete('lookups/{type}/{id}', [LookupCrudController::class, 'destroy']);
+
+                Route::get('roles', [UserManagementController::class, 'roles']);
+                Route::get('users', [UserManagementController::class, 'index']);
+                Route::post('users', [UserManagementController::class, 'store']);
+                Route::patch('users/{user}', [UserManagementController::class, 'update']);
+                Route::post('users/{user}/reset-password', [UserManagementController::class, 'resetPassword']);
+            });
         });
     });
 });

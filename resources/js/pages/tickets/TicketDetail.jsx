@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { can, P } from '@/lib/permissions';
+import { TaskDialog } from '@/pages/Tasks';
+import { KanbanSquare } from 'lucide-react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -37,6 +40,7 @@ export default function TicketDetail() {
   const { data: ticket, isLoading, isError } = useTicket(id);
   // Mobile: Messenger-style — chat fills the screen, info lives in its own tab.
   const [mobileTab, setMobileTab] = useState('chat');
+  const [taskOpen, setTaskOpen] = useState(false);
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['ticket', id] });
@@ -64,7 +68,7 @@ export default function TicketDetail() {
   const canAccept = isTeam && ['open', 'reopened'].includes(ticket.status) && !ticket.accepted_by;
   const canResolve = isTeam && isAssignee && ['accepted', 'reopened'].includes(ticket.status);
   const canReopen = ['resolved', 'closed'].includes(ticket.status);
-  const canManage = isTeam && (user.role === 'admin' || isAssignee);
+  const canManage = isTeam && (can(user, P.SETTINGS) || isAssignee);
 
   return (
     <div className="space-y-5">
@@ -101,6 +105,11 @@ export default function TicketDetail() {
           )}
           {canReopen && (
             <ReopenButton onConfirm={() => action.mutate({ verb: 'reopen' })} />
+          )}
+          {isTeam && (
+            <Tooltip label="Turn this into a task for the team">
+              <Button size="sm" variant="outline" onClick={() => setTaskOpen(true)}><KanbanSquare /> Create task</Button>
+            </Tooltip>
           )}
         </div>
       </div>
@@ -139,6 +148,21 @@ export default function TicketDetail() {
           <TimelineCard ticket={ticket} />
         </div>
       </div>
+
+      {taskOpen && (
+        <TaskDialog
+          task={{
+            title: `${ticket.ticket_number}: ${ticket.subject}`,
+            description: ticket.description,
+            ticket_id: ticket.id,
+            ticket: { id: ticket.id, ticket_number: ticket.ticket_number, subject: ticket.subject },
+            client_id: ticket.customer?.role === 'customer' ? ticket.customer.id : null,
+            type: 'bug',
+            priority: ['High', 'Critical'].includes(ticket.urgency?.name) ? 'high' : 'medium',
+          }}
+          onClose={() => setTaskOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -242,7 +266,7 @@ function ReopenButton({ onConfirm }) {
 
 function DetailsCard({ ticket }) {
   const rows = [
-    { icon: Layers, label: 'System', value: ticket.system_type?.name },
+    { icon: Layers, label: 'System', value: ticket.system_type?.name && (ticket.client_system?.label ? `${ticket.system_type.name} (${ticket.client_system.label})` : ticket.system_type.name) },
     { icon: Tag, label: 'Category', value: ticket.category?.name },
     { icon: Zap, label: 'Urgency', value: ticket.urgency ? <UrgencyDot urgency={ticket.urgency} /> : null },
   ].filter((r) => r.value);

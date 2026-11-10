@@ -4,6 +4,7 @@ namespace App\Policies;
 
 use App\Models\Ticket;
 use App\Models\User;
+use App\Support\Permissions;
 
 class TicketPolicy
 {
@@ -14,7 +15,7 @@ class TicketPolicy
 
     public function view(User $user, Ticket $ticket): bool
     {
-        return $user->isTeam() || $ticket->customer_id === $user->id;
+        return $user->hasPermission(Permissions::TICKETS) || $ticket->isParticipant($user);
     }
 
     public function create(User $user): bool
@@ -24,12 +25,12 @@ class TicketPolicy
 
     public function update(User $user, Ticket $ticket): bool
     {
-        return $user->isTeam();
+        return $user->hasPermission(Permissions::TICKETS);
     }
 
     public function accept(User $user, Ticket $ticket): bool
     {
-        return $user->isTeam();
+        return $user->hasPermission(Permissions::TICKETS);
     }
 
     public function resolve(User $user, Ticket $ticket): bool
@@ -40,7 +41,7 @@ class TicketPolicy
 
     public function reopen(User $user, Ticket $ticket): bool
     {
-        return $user->isTeam() || $ticket->customer_id === $user->id;
+        return $user->hasPermission(Permissions::TICKETS) || $ticket->customer_id === $user->id;
     }
 
     public function manageAssignees(User $user, Ticket $ticket): bool

@@ -186,7 +186,7 @@ class AnalyticsController extends Controller
 
     private function agentLeaderboard(Carbon $from, Carbon $to): array
     {
-        $agents = User::whereIn('role', ['agent', 'admin'])->get();
+        $agents = User::team()->get();
 
         return $agents->map(function ($agent) use ($from, $to) {
             $resolved = Ticket::where('resolved_by', $agent->id)

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\Role;
+use App\Support\Permissions;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -32,6 +33,7 @@ class User extends Authenticatable
         'bio',
         'avatar_path',
         'is_active',
+        'permissions',
         'approval_status',
         'approved_by',
         'approved_at',
@@ -51,6 +53,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'role' => Role::class,
             'is_active' => 'boolean',
+            'permissions' => 'array',
             'approved_at' => 'datetime',
         ];
     }
@@ -83,6 +86,50 @@ class User extends Authenticatable
     public function isCustomer(): bool
     {
         return $this->role === Role::Customer;
+    }
+
+    /**
+     * Effective permissions: the admin-chosen set if one was saved, else the role's defaults.
+     * Admins always have everything; clients never have any.
+     *
+     * @return array<string>
+     */
+    public function permissionList(): array
+    {
+        if (! $this->role->isTeam()) {
+            return [];
+        }
+        if ($this->isAdmin()) {
+            return Permissions::ALL;
+        }
+
+        return array_values(array_intersect(Permissions::ALL, $this->permissions ?? $this->role->defaultPermissions()));
+    }
+
+    public function hasPermission(string ...$any): bool
+    {
+        return (bool) array_intersect($any, $this->permissionList());
+    }
+
+    public function canViewCredentials(): bool
+    {
+        return $this->hasPermission(Permissions::CREDENTIALS);
+    }
+
+    /** Who can open the Client Systems list at all. */
+    public function canAccessClientSystems(): bool
+    {
+        return $this->hasPermission(Permissions::SYSTEMS_VIEW, Permissions::CREDENTIALS, Permissions::BILLING);
+    }
+
+    public function scopeTeam($query)
+    {
+        return $query->whereIn('role', Role::teamValues());
+    }
+
+    public function clientSystems(): HasMany
+    {
+        return $this->hasMany(ClientSystem::class, 'client_id');
     }
 
     public function tickets(): HasMany

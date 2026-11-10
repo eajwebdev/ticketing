@@ -10,7 +10,7 @@ import PublicProfile from '@/pages/PublicProfile';
 
 import Dashboard from '@/pages/Dashboard';
 import TicketsList from '@/pages/tickets/TicketsList';
-import CreateTicket from '@/pages/tickets/CreateTicket';
+import { OpenCreateTicketRoute } from '@/components/tickets/CreateTicketDialog';
 import TicketDetail from '@/pages/tickets/TicketDetail';
 import NotificationsPage from '@/pages/Notifications';
 import ProfilePage from '@/pages/Profile';
@@ -21,6 +21,26 @@ import AdminTeam from '@/pages/admin/Team';
 import AdminLookups from '@/pages/admin/Lookups';
 import AdminUsers from '@/pages/admin/Users';
 import Analytics from '@/pages/admin/Analytics';
+import ClientSystems from '@/pages/admin/ClientSystems';
+import Sales from '@/pages/admin/Sales';
+
+import Tasks from '@/pages/Tasks';
+import Leads from '@/pages/Leads';
+import { can, P } from '@/lib/permissions';
+
+// Page only for users holding one of these permissions.
+function Perm({ any, children }) {
+  const { user } = useAuth();
+  if (!can(user, ...any)) return <Navigate to="/app" replace />;
+  return children;
+}
+
+// Any team member (not clients).
+function TeamOnly({ children }) {
+  const { user } = useAuth();
+  if (!user || user.role === 'customer') return <Navigate to="/app" replace />;
+  return children;
+}
 
 function Protected({ children, roles }) {
   const { user, loading } = useAuth();
@@ -53,18 +73,23 @@ export default function App() {
       >
         <Route index element={<Dashboard />} />
         <Route path="tickets" element={<TicketsList />} />
-        <Route path="tickets/new" element={<CreateTicket />} />
+        <Route path="tickets/new" element={<OpenCreateTicketRoute />} />
         <Route path="tickets/:id" element={<TicketDetail />} />
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="profile" element={<ProfilePage />} />
 
-        {/* Admin */}
-        <Route path="admin/analytics" element={<Protected roles={['admin']}><Analytics /></Protected>} />
-        <Route path="admin/clients" element={<Protected roles={['admin']}><AdminClients /></Protected>} />
-        <Route path="admin/systems" element={<Protected roles={['admin']}><AdminSystems /></Protected>} />
-        <Route path="admin/team" element={<Protected roles={['admin']}><AdminTeam /></Protected>} />
-        <Route path="admin/lookups" element={<Protected roles={['admin']}><AdminLookups /></Protected>} />
-        <Route path="admin/users" element={<Protected roles={['admin']}><AdminUsers /></Protected>} />
+        <Route path="tasks" element={<TeamOnly><Tasks /></TeamOnly>} />
+        <Route path="leads" element={<Perm any={[P.LEADS]}><Leads /></Perm>} />
+
+        {/* Management */}
+        <Route path="admin/analytics" element={<Perm any={[P.ANALYTICS]}><Analytics /></Perm>} />
+        <Route path="admin/clients" element={<Perm any={[P.CLIENTS]}><AdminClients /></Perm>} />
+        <Route path="admin/client-systems" element={<Perm any={[P.SYSTEMS_VIEW, P.CREDENTIALS, P.BILLING]}><ClientSystems /></Perm>} />
+        <Route path="admin/sales" element={<Perm any={[P.BILLING]}><Sales /></Perm>} />
+        <Route path="admin/systems" element={<Perm any={[P.SETTINGS]}><AdminSystems /></Perm>} />
+        <Route path="admin/team" element={<Perm any={[P.SETTINGS]}><AdminTeam /></Perm>} />
+        <Route path="admin/lookups" element={<Perm any={[P.SETTINGS]}><AdminLookups /></Perm>} />
+        <Route path="admin/users" element={<Perm any={[P.SETTINGS]}><AdminUsers /></Perm>} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

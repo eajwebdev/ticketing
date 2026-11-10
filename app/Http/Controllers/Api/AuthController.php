@@ -63,6 +63,8 @@ class AuthController extends Controller
         }
 
         $token = $user->createToken('spa')->plainTextToken;
+        // So the resource can include the user's own permissions in this response.
+        $request->setUserResolver(fn () => $user);
 
         return response()->json([
             'user' => new UserResource($user),

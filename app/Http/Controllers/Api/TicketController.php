@@ -7,12 +7,15 @@ use App\Events\TicketUpdated;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreTicketRequest;
 use App\Http\Resources\TicketResource;
+use App\Models\ClientSystem;
+use App\Support\Permissions;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Notifications\TicketNotification;
 use App\Services\TicketService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class TicketController extends Controller
 {
@@ -23,13 +26,16 @@ class TicketController extends Controller
         $user = $request->user();
 
         $query = Ticket::query()
-            ->with(['customer', 'systemType', 'category', 'urgency', 'acceptedBy', 'assignees'])
+            ->with(['customer', 'systemType', 'clientSystem', 'category', 'urgency', 'acceptedBy', 'assignees'])
             ->withCount('messages')
             ->latest();
 
         // Role scoping
         if ($user->isCustomer()) {
             $query->where('customer_id', $user->id);
+        } elseif (! $user->hasPermission(Permissions::TICKETS)) {
+            // Team members outside the support queue only see tickets they were pulled into.
+            $query->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id));
         }
 
         // Filters
@@ -66,15 +72,33 @@ class TicketController extends Controller
         $user = $request->user();
 
         // Only admins may file a ticket on behalf of a client.
-        $customerId = $user->isAdmin() && $request->filled('customer_id')
+        $customerId = $user->hasPermission(Permissions::TICKETS, Permissions::CLIENTS) && $request->filled('customer_id')
             ? $request->customer_id
             : $user->id;
 
-        $ticket = DB::transaction(function () use ($request, $customerId, $user) {
+        // A client with registered systems must say which one the ticket is about;
+        // the system type is then taken from that system.
+        $systemTypeId = $request->system_type_id;
+        $clientSystemId = null;
+        $hasSystems = ClientSystem::where('client_id', $customerId)->where('status', '!=', 'cancelled')->exists();
+
+        if ($request->filled('client_system_id')) {
+            $clientSystem = ClientSystem::find($request->client_system_id);
+            if (! $clientSystem || (int) $clientSystem->client_id !== (int) $customerId || $clientSystem->status === 'cancelled') {
+                throw ValidationException::withMessages(['client_system_id' => 'Choose one of this client’s systems.']);
+            }
+            $clientSystemId = $clientSystem->id;
+            $systemTypeId = $clientSystem->system_type_id;
+        } elseif ($hasSystems) {
+            throw ValidationException::withMessages(['client_system_id' => 'Please choose which system this ticket is about.']);
+        }
+
+        $ticket = DB::transaction(function () use ($request, $customerId, $user, $systemTypeId, $clientSystemId) {
             $ticket = Ticket::create([
                 'ticket_number' => 'PENDING',
                 'customer_id' => $customerId,
-                'system_type_id' => $request->system_type_id,
+                'system_type_id' => $systemTypeId,
+                'client_system_id' => $clientSystemId,
                 'category_id' => $request->category_id,
                 'urgency_id' => $request->urgency_id,
                 'subject' => $request->subject,
@@ -89,9 +113,40 @@ class TicketController extends Controller
             return $ticket;
         });
 
-        $ticket->load(['customer', 'systemType', 'category', 'urgency']);
+        $ticket->load(['customer', 'systemType', 'clientSystem', 'category', 'urgency']);
 
         return new TicketResource($ticket);
+    }
+
+    /**
+     * The systems a ticket can be filed against: the caller's own (clients), or the
+     * chosen client's (admins filing on their behalf). No billing or login details.
+     */
+    public function systems(Request $request)
+    {
+        $user = $request->user();
+        $customerId = $user->hasPermission(Permissions::TICKETS, Permissions::CLIENTS) && $request->filled('customer_id')
+            ? $request->integer('customer_id')
+            : ($user->isCustomer() ? $user->id : null);
+
+        if (! $customerId) {
+            return ['data' => []];
+        }
+
+        $systems = ClientSystem::with('systemType')
+            ->where('client_id', $customerId)
+            ->where('status', '!=', 'cancelled')
+            ->get()
+            ->sortBy(fn ($s) => $s->displayName())
+            ->values()
+            ->map(fn ($s) => [
+                'id' => $s->id,
+                'label' => $s->label,
+                'display_name' => $s->displayName(),
+                'system_type' => ['id' => $s->systemType->id, 'name' => $s->systemType->name, 'icon' => $s->systemType->icon],
+            ]);
+
+        return ['data' => $systems];
     }
 
     public function show(Request $request, Ticket $ticket)
@@ -99,7 +154,7 @@ class TicketController extends Controller
         $this->authorize('view', $ticket);
 
         $ticket->load([
-            'customer', 'systemType', 'category', 'urgency', 'acceptedBy', 'resolvedBy',
+            'customer', 'systemType', 'clientSystem', 'category', 'urgency', 'acceptedBy', 'resolvedBy',
             'assignees' => fn ($q) => $q->withPivot('is_primary'),
             'activities' => fn ($q) => $q->with('user')->latest(),
         ])->loadCount('messages');

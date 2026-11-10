@@ -17,6 +17,10 @@ class TicketResource extends JsonResource
             'status' => $this->status->value,
             'customer' => new UserResource($this->whenLoaded('customer')),
             'system_type' => new LookupResource($this->whenLoaded('systemType')),
+            'client_system' => $this->whenLoaded('clientSystem', fn () => $this->clientSystem ? [
+                'id' => $this->clientSystem->id,
+                'label' => $this->clientSystem->label,
+            ] : null),
             'category' => new LookupResource($this->whenLoaded('category')),
             'urgency' => new LookupResource($this->whenLoaded('urgency')),
             'accepted_by' => new UserResource($this->whenLoaded('acceptedBy')),

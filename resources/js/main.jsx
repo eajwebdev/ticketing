@@ -6,6 +6,7 @@ import { Toaster } from 'sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { AuthProvider } from '@/context/AuthContext';
 import { NotificationsProvider } from '@/context/NotificationsContext';
+import { ThemeProvider } from '@/context/ThemeContext';
 import App from '@/App';
 import '../css/app.css';
 
@@ -19,18 +20,18 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
       <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
         <AuthProvider>
           <NotificationsProvider>
             <TooltipProvider delayDuration={200}>
               <App />
               <Toaster
-                theme="dark"
                 position="top-right"
                 toastOptions={{
                   style: {
-                    background: 'rgba(21,36,73,0.92)',
-                    border: '1px solid #1d3060',
-                    color: '#eaf0ff',
+                    background: 'var(--toast-bg)',
+                    border: '1px solid var(--color-navy-600)',
+                    color: 'var(--color-mist)',
                     backdropFilter: 'blur(12px)',
                   },
                 }}
@@ -38,6 +39,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             </TooltipProvider>
           </NotificationsProvider>
         </AuthProvider>
+        </ThemeProvider>
       </QueryClientProvider>
     </BrowserRouter>
   </React.StrictMode>

@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Bell, AtSign, UserPlus, MessageSquare, CheckCircle2, CheckCheck } from 'lucide-react';
+import { Bell, AtSign, UserPlus, MessageSquare, CheckCircle2, CheckCheck, CalendarClock, AlertTriangle, KanbanSquare, Target } from 'lucide-react';
 import { useNotifications } from '@/context/NotificationsContext';
 import { Button } from '@/components/ui/button';
 import { fromNow } from '@/lib/format';
@@ -9,7 +9,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tooltip } from '@/components/ui/tooltip';
 
-const ICONS = { mention: AtSign, assignment: UserPlus, message: MessageSquare, status: CheckCircle2 };
+const ICONS = {
+  mention: AtSign, assignment: UserPlus, message: MessageSquare, status: CheckCircle2,
+  billing_due: CalendarClock, billing_due_today: CalendarClock, billing_overdue: AlertTriangle,
+  task_assigned: KanbanSquare, task_due: KanbanSquare, lead_assigned: Target, lead_follow_up: Target,
+};
 
 export function NotificationBell() {
   const { items, unread, markRead, markAllRead } = useNotifications();
@@ -17,7 +21,9 @@ export function NotificationBell() {
 
   const open = (n) => {
     if (!n.read_at) markRead(n.id);
-    if (n.data?.ticket_id) navigate(`/app/tickets/${n.data.ticket_id}`);
+    if (n.data?.link) navigate(n.data.link);
+    else if (n.data?.ticket_id) navigate(`/app/tickets/${n.data.ticket_id}`);
+    else if (n.data?.client_system_id) navigate(`/app/admin/client-systems?focus=${n.data.client_system_id}`);
   };
 
   return (

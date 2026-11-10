@@ -57,3 +57,62 @@ export const STATUS_META = {
   closed: { label: 'Closed', color: '#8A96B8', bg: 'rgba(138,150,184,0.15)' },
   reopened: { label: 'Reopened', color: '#E91E4F', bg: 'rgba(233,30,79,0.15)' },
 };
+
+// ---- Billing ----
+const pesoFmt = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2 });
+const pesoCompact = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', notation: 'compact', maximumFractionDigits: 1 });
+
+export function peso(n) {
+  return pesoFmt.format(Number(n) || 0);
+}
+
+export function pesoShort(n) {
+  return pesoCompact.format(Number(n) || 0);
+}
+
+export const CYCLE_LABELS = {
+  monthly: 'Monthly',
+  quarterly: 'Quarterly',
+  semiannual: 'Every 6 months',
+  yearly: 'Yearly',
+};
+
+export const CYCLE_SUFFIX = { monthly: '/mo', quarterly: '/qtr', semiannual: '/6 mo', yearly: '/yr' };
+
+export const METHOD_LABELS = {
+  cash: 'Cash',
+  gcash: 'GCash',
+  maya: 'Maya',
+  bank_transfer: 'Bank transfer',
+  check: 'Check',
+  other: 'Other',
+};
+
+// Today as YYYY-MM-DD in the viewer's local time (not UTC).
+export function todayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// Parse a plain YYYY-MM-DD as a local date (new Date('2026-01-31') would be UTC midnight).
+export function localDate(iso) {
+  if (!iso) return null;
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+export function dueLabel(days) {
+  if (days < 0) return `Overdue ${Math.abs(days)}d`;
+  if (days === 0) return 'Due today';
+  if (days === 1) return 'Due tomorrow';
+  return `Due in ${days}d`;
+}
+
+export const DUE_META = {
+  overdue: { label: 'Overdue', color: '#E91E4F', bg: 'rgba(233,30,79,0.15)' },
+  due_today: { label: 'Due today', color: '#F97316', bg: 'rgba(249,115,22,0.15)' },
+  due_soon: { label: 'Due soon', color: '#F59E0B', bg: 'rgba(245,158,11,0.15)' },
+  upcoming: { label: 'Active', color: '#22C55E', bg: 'rgba(34,197,94,0.15)' },
+  paused: { label: 'Paused', color: '#8A96B8', bg: 'rgba(138,150,184,0.15)' },
+  cancelled: { label: 'Cancelled', color: '#64748B', bg: 'rgba(100,116,139,0.15)' },
+};

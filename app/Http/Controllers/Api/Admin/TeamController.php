@@ -13,7 +13,7 @@ class TeamController extends Controller
 {
     public function index(Request $request)
     {
-        $query = User::whereIn('role', ['agent', 'admin'])->latest();
+        $query = User::team()->latest();
 
         if ($request->filled('search')) {
             $s = $request->search;

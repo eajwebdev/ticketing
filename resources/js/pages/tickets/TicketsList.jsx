@@ -4,6 +4,7 @@ import { PlusCircle, Search, Inbox, Filter } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTickets, useLookups } from '@/hooks/queries';
 import { TicketCard } from '@/components/tickets/TicketCard';
+import { useCreateTicket } from '@/components/tickets/CreateTicketDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton, EmptyState } from '@/components/ui/misc';
@@ -22,6 +23,7 @@ const STATUSES = [
 
 export default function TicketsList() {
   const { user } = useAuth();
+  const { openCreateTicket } = useCreateTicket();
   const isTeam = user?.role !== 'customer';
   const { data: lookups } = useLookups();
   const [filters, setFilters] = useState({ status: 'all', system_type: 'all', urgency: 'all', mine: false });
@@ -47,7 +49,7 @@ export default function TicketsList() {
             {data?.meta?.total != null ? `${data.meta.total} ticket${data.meta.total === 1 ? '' : 's'}` : 'Loading…'}
           </p>
         </div>
-        <Button asChild><Link to="/app/tickets/new"><PlusCircle /> New Ticket</Link></Button>
+        <Button onClick={openCreateTicket}><PlusCircle /> New Ticket</Button>
       </div>
 
       {/* Filters */}

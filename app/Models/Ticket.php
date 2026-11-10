@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Ticket extends Model
 {
     protected $fillable = [
-        'ticket_number', 'customer_id', 'system_type_id', 'category_id', 'urgency_id',
+        'ticket_number', 'customer_id', 'system_type_id', 'client_system_id', 'category_id', 'urgency_id',
         'subject', 'description', 'status', 'accepted_by', 'resolved_by',
         'accepted_at', 'resolved_at', 'closed_at', 'first_response_at', 'expected_resolution_at',
     ];
@@ -36,6 +36,11 @@ class Ticket extends Model
     public function systemType(): BelongsTo
     {
         return $this->belongsTo(SystemType::class);
+    }
+
+    public function clientSystem(): BelongsTo
+    {
+        return $this->belongsTo(ClientSystem::class);
     }
 
     public function category(): BelongsTo

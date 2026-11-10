@@ -2,9 +2,13 @@ import { useState } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  LayoutDashboard, Ticket, PlusCircle, Bell, BarChart3, Users, Building2,
-  SlidersHorizontal, UserCog, LogOut, Menu, X, ChevronDown, MonitorCog,
+  LayoutDashboard, Ticket, Bell, BarChart3, Users, Building2,
+  SlidersHorizontal, UserCog, LogOut, Menu, X, ChevronDown, MonitorCog, ServerCog, Wallet,
+  KanbanSquare, Target, Sun, Moon,
 } from 'lucide-react';
+import { can, isTeamUser, P } from '@/lib/permissions';
+import { useTheme, useApplyTheme } from '@/context/ThemeContext';
+import { Tooltip } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { useNotifications } from '@/context/NotificationsContext';
@@ -12,32 +16,59 @@ import { Logo } from '@/components/brand/Logo';
 import { UserAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { NotificationBell } from './NotificationBell';
+import { CreateTicketProvider } from '@/components/tickets/CreateTicketDialog';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
 
-function navItems(role) {
-  const base = [
+function navItems(user) {
+  if (!isTeamUser(user)) {
+    return [
+      { to: '/app', icon: LayoutDashboard, label: 'Dashboard', end: true },
+      { to: '/app/tickets', icon: Ticket, label: 'My Tickets' },
+      { to: '/app/notifications', icon: Bell, label: 'Notifications' },
+    ];
+  }
+  const items = [
     { to: '/app', icon: LayoutDashboard, label: 'Dashboard', end: true },
-    { to: '/app/tickets', icon: Ticket, label: role === 'customer' ? 'My Tickets' : 'Tickets' },
-    { to: '/app/tickets/new', icon: PlusCircle, label: 'New Ticket' },
+    { to: '/app/tasks', icon: KanbanSquare, label: 'Tasks' },
+    { to: '/app/tickets', icon: Ticket, label: can(user, P.TICKETS) ? 'Tickets' : 'My Tickets' },
     { to: '/app/notifications', icon: Bell, label: 'Notifications' },
-  ];
-  const admin = [
-    { section: 'Admin' },
-    { to: '/app/admin/analytics', icon: BarChart3, label: 'Analytics' },
-    { to: '/app/admin/clients', icon: Building2, label: 'Clients' },
-    { to: '/app/admin/systems', icon: MonitorCog, label: 'Systems' },
-    { to: '/app/admin/team', icon: Users, label: 'Team' },
-    { to: '/app/admin/lookups', icon: SlidersHorizontal, label: 'Categories & Urgency' },
-    { to: '/app/admin/users', icon: UserCog, label: 'Users' },
-  ];
-  return role === 'admin' ? [...base, ...admin] : base;
+
+    { section: 'Clients & Sales' },
+    can(user, P.LEADS) && { to: '/app/leads', icon: Target, label: 'Leads' },
+    can(user, P.CLIENTS) && { to: '/app/admin/clients', icon: Building2, label: 'Clients' },
+    can(user, P.SYSTEMS_VIEW, P.CREDENTIALS, P.BILLING) && { to: '/app/admin/client-systems', icon: ServerCog, label: 'Client Systems' },
+    can(user, P.BILLING) && { to: '/app/admin/sales', icon: Wallet, label: 'Sales' },
+
+    { section: 'Insights' },
+    can(user, P.ANALYTICS) && { to: '/app/admin/analytics', icon: BarChart3, label: 'Analytics' },
+
+    { section: 'Settings' },
+    can(user, P.SETTINGS) && { to: '/app/admin/users', icon: UserCog, label: 'Users & Roles' },
+    can(user, P.SETTINGS) && { to: '/app/admin/team', icon: Users, label: 'Team Profiles' },
+    can(user, P.SETTINGS) && { to: '/app/admin/systems', icon: MonitorCog, label: 'Systems' },
+    can(user, P.SETTINGS) && { to: '/app/admin/lookups', icon: SlidersHorizontal, label: 'Categories & Urgency' },
+  ].filter(Boolean);
+  // Drop section headers that ended up with nothing under them.
+  return items.filter((it, i) => !it.section || (items[i + 1] && !items[i + 1].section));
+}
+
+function ThemeToggle() {
+  const { theme, toggle } = useTheme();
+  const light = theme === 'light';
+  return (
+    <Tooltip label={light ? 'Dark mode' : 'Light mode'}>
+      <Button variant="ghost" size="icon" onClick={toggle} aria-label={light ? 'Switch to dark mode' : 'Switch to light mode'}>
+        {light ? <Moon className="text-mist/80" /> : <Sun className="text-mist/80" />}
+      </Button>
+    </Tooltip>
+  );
 }
 
 function SidebarContent({ onNavigate }) {
   const { user } = useAuth();
-  const items = navItems(user?.role);
+  const items = navItems(user);
   return (
     <div className="flex h-full flex-col gap-1 p-4">
       <Link to="/app" className="mb-4 flex justify-center px-2 py-1" onClick={onNavigate}>
@@ -89,9 +120,11 @@ export function AppLayout() {
     navigate('/');
   };
 
-  const roleLabel = { customer: 'Client', agent: 'Agent', admin: 'Admin' }[user?.role] ?? '';
+  const roleLabel = user?.role_label ?? '';
+  useApplyTheme();
 
   return (
+    <CreateTicketProvider>
     <div className="flex min-h-screen">
       {/* Desktop sidebar */}
       <aside className="hidden w-64 shrink-0 border-r border-navy-600/60 lg:block">
@@ -127,6 +160,7 @@ export function AppLayout() {
             <Menu />
           </Button>
           <div className="flex-1" />
+          <ThemeToggle />
           <NotificationBell />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -164,5 +198,6 @@ export function AppLayout() {
         </main>
       </div>
     </div>
+    </CreateTicketProvider>
   );
 }

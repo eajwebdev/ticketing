@@ -174,3 +174,81 @@
       linear-gradient(120deg, rgba(233, 30, 79, 0.45), rgba(29, 48, 96, 0.8) 40%, rgba(233, 30, 79, 0.25)) border-box;
   }
 }
+
+/* ==========================================================================
+   Light mode — applied to the app shell via <html data-theme="light">.
+   Unlayered on purpose so it overrides Tailwind's theme layer. Every utility
+   that uses navy/mist/white tokens flips automatically.
+   ========================================================================== */
+:root { --toast-bg: rgba(21, 36, 73, 0.92); }
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --toast-bg: rgba(255, 255, 255, 0.97);
+
+  --color-navy-900: #f3f5fa;
+  --color-navy-800: #ffffff;
+  --color-navy-700: #eef1f8;
+  --color-navy-600: #dce2ee;
+  --color-navy-500: #c3cde0;
+
+  --color-mist: #16233f;
+  --color-white: #0b1630;           /* headings use text-white */
+  --color-crimson-soft: #d3164a;    /* darker for contrast on white */
+
+  --color-background: #f3f5fa;
+  --color-foreground: #16233f;
+  --color-card: #ffffff;
+  --color-card-foreground: #16233f;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #16233f;
+  --color-secondary: #eef1f8;
+  --color-secondary-foreground: #16233f;
+  --color-muted: #eef1f8;
+  --color-muted-foreground: #5b6886;
+  --color-accent: #e6ebf5;
+  --color-accent-foreground: #0b1630;
+  --color-border: #dce2ee;
+  --color-input: #dce2ee;
+
+  /* status text colours tuned for a white background */
+  --color-emerald-400: #059669;
+  --color-amber-400: #b45309;
+  --color-rose-400: #e11d48;
+  --color-sky-400: #0284c7;
+}
+
+/* Text on solid accent fills stays white in both themes. */
+:root[data-theme='light'] :is(.bg-crimson, .bg-crimson-dark, .bg-rose-600, .bg-emerald-600, .bg-primary, .bg-blue-600) {
+  color: #fff;
+}
+
+:root[data-theme='light'] body::before {
+  background:
+    radial-gradient(60% 50% at 15% 0%, rgba(233, 30, 79, 0.06), transparent 60%),
+    radial-gradient(50% 50% at 100% 20%, rgba(59, 130, 246, 0.07), transparent 60%);
+}
+
+:root[data-theme='light'] .glass {
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid #e2e7f1;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 4px 16px -8px rgba(16, 24, 40, 0.08);
+}
+:root[data-theme='light'] .glass-strong {
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid #dce2ee;
+  box-shadow: 0 24px 60px -20px rgba(16, 24, 40, 0.25);
+}
+:root[data-theme='light'] .grad-text {
+  background: linear-gradient(120deg, #0b1630 0%, #c41340 70%, #e91e4f 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+:root[data-theme='light'] .hover-lift:hover {
+  box-shadow: 0 16px 36px -18px rgba(16, 24, 40, 0.25), 0 0 0 1px rgba(233, 30, 79, 0.12);
+}
+:root[data-theme='light'] .grad-border {
+  background:
+    linear-gradient(160deg, #ffffff, #f8f9fd) padding-box,
+    linear-gradient(120deg, rgba(233, 30, 79, 0.35), #dce2ee 40%, rgba(233, 30, 79, 0.2)) border-box;
+}

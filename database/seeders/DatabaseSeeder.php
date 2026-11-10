@@ -58,7 +58,7 @@ class DatabaseSeeder extends Seeder
 
         // ---- Default admin (change the password after first login!) ----
         $email = env('SEED_ADMIN_EMAIL', 'abriljredwin@gmail.com');
-        $password = env('SEED_ADMIN_PASSWORD', 'edzkiE@2026');
+        $password = env('SEED_ADMIN_PASSWORD', 'EdzkiE@2026');
 
         User::firstOrCreate(
             ['email' => $email],
@@ -70,7 +70,7 @@ class DatabaseSeeder extends Seeder
                 'department' => 'Development',
                 'is_active' => true,
                 'approval_status' => 'approved',
-                'approved_at' => now(),
+                'approved_at' => now(), 
             ]
         );
 

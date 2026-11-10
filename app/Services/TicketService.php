@@ -45,7 +45,7 @@ class TicketService
     public function mentionableUsers(Ticket $ticket)
     {
         $team = $ticket->assignees()
-            ->whereIn('role', ['agent', 'admin'])
+            ->whereIn('role', \App\Enums\Role::teamValues())
             ->get();
 
         $customer = $ticket->customer()->first();

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Users, Search, UserPlus, Copy, CheckCircle2, ShieldCheck, Pencil, Eye, Power } from 'lucide-react';
+import { Users, Search, UserPlus, Copy, CheckCircle2, ShieldCheck, Pencil, Eye, Power, KeyRound } from 'lucide-react';
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { UserAvatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { IconButton, Skeleton, EmptyState, Spinner } from '@/components/ui/misc';
+import { RoleBadge, useRoleCatalog } from '@/pages/admin/Users';
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from '@/components/ui/select';
@@ -32,7 +33,7 @@ export default function AdminTeam() {
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-2xl font-bold text-white">Team</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Add and edit agents and admins.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Public profiles of your team — shown on the landing page and ticket chats.</p>
         </div>
         <Button onClick={() => setDialog({})}><UserPlus /> Add Team Member</Button>
       </div>
@@ -69,9 +70,7 @@ export default function AdminTeam() {
               </div>
               <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
                 <span>{m.department || '—'}</span>
-                <Badge className={m.role === 'admin' ? 'text-crimson-soft border-crimson/40' : 'text-mist/70'}>
-                  {m.role === 'admin' && <ShieldCheck className="h-3 w-3" />}{m.role}
-                </Badge>
+                <RoleBadge role={m.role} label={m.role_label} />
               </div>
             </div>
           ))}
@@ -88,6 +87,7 @@ export default function AdminTeam() {
 }
 
 function TeamDialog({ member, onClose }) {
+  const { data: catalog } = useRoleCatalog();
   const isEdit = !!member.id;
   const queryClient = useQueryClient();
   const [tempPassword, setTempPassword] = useState('');
@@ -95,7 +95,7 @@ function TeamDialog({ member, onClose }) {
   const [form, setForm] = useState({
     name: member.name ?? '',
     email: member.email ?? '',
-    role: member.role ?? 'agent',
+    role: member.role ?? 'developer',
     position: member.position ?? '',
     department: member.department ?? '',
     phone: member.phone ?? '',
@@ -153,8 +153,9 @@ function TeamDialog({ member, onClose }) {
                   <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="agent">Agent</SelectItem>
-                      <SelectItem value="admin">Admin</SelectItem>
+                      {(catalog?.roles ?? []).filter((r) => r.is_team).map((r) => (
+                        <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </F>
@@ -163,6 +164,7 @@ function TeamDialog({ member, onClose }) {
                 <F label="Department" e={err('department')}><Input value={form.department} onChange={set('department')} /></F>
               </div>
               <F label="Bio" e={err('bio')}><Textarea rows={3} value={form.bio} onChange={set('bio')} /></F>
+              <p className="text-xs text-muted-foreground">Fine-tune what this person can access on <span className="text-mist">Users &amp; Roles</span>.</p>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
                 <Button type="submit" disabled={mutation.isPending}>
