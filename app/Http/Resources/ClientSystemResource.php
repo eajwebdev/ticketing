@@ -32,7 +32,13 @@ class ClientSystemResource extends JsonResource
             // Billing details are admin-only; staff with credential access just see the system.
             'amount' => $this->when($isAdmin, fn () => (float) $this->amount),
             'billing_cycle' => $this->when($isAdmin, $this->billing_cycle),
+            'regular_monthly_rate' => $this->when($isAdmin, fn () => $this->regular_monthly_rate === null ? null : (float) $this->regular_monthly_rate),
+            'regular_cycle_amount' => $this->when($isAdmin, fn () => $this->regularCycleAmount()),
+            'discount_amount' => $this->when($isAdmin, fn () => $this->discountAmount()),
+            'discount_percent' => $this->when($isAdmin, fn () => $this->discountPercent()),
             'next_due_date' => $this->next_due_date->toDateString(),
+            'started_on' => $this->started_on?->toDateString(),
+            'billing_anchor_day' => $this->billing_anchor_day,
             'days_until_due' => $this->daysUntilDue(),
             'due_state' => $this->dueState(),
             'status' => $this->status,

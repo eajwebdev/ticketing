@@ -25,6 +25,7 @@ Route::prefix('v1')->group(function () {
     // Public auth
     Route::post('auth/register', [AuthController::class, 'register']);
     Route::post('auth/login', [AuthController::class, 'login']);
+    Route::post('auth/google', [AuthController::class, 'google'])->middleware('throttle:20,1');
 
     // Public landing stats (real, cached)
     Route::get('stats', [\App\Http\Controllers\Api\StatsController::class, 'index']);

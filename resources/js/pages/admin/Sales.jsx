@@ -111,7 +111,7 @@ export default function Sales() {
             <StatCard index={0} icon={Wallet} label="This month" value={peso(s.this_month)} trend={monthTrend} sub={`Last month ${peso(s.last_month)}`} accent="#22C55E" />
             <StatCard index={1} icon={CalendarDays} label="This year" value={peso(s.this_year)} accent="#3B82F6" />
             <StatCard index={2} icon={TrendingUp} label="All time" value={peso(s.all_time)} accent="#8B5CF6" />
-            <StatCard index={3} icon={Receipt} label="In selected range" value={peso(s.range_total)} sub={`${s.range_count} payment${s.range_count === 1 ? '' : 's'}`} />
+            <StatCard index={3} icon={Receipt} label="In selected range" value={peso(s.range_total)} sub={`${s.range_count} payment${s.range_count === 1 ? '' : 's'}${s.range_discounts > 0 ? ` · ${peso(s.range_discounts)} lock-in discounts` : ''}`} />
           </div>
 
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
@@ -222,7 +222,10 @@ export default function Sales() {
                           {METHOD_LABELS[p.method]}
                           {p.reference && <div className="text-[11px]">{p.reference}</div>}
                         </td>
-                        <td className="whitespace-nowrap px-2 py-3 text-right font-semibold text-emerald-400">{peso(p.amount)}</td>
+                        <td className="whitespace-nowrap px-2 py-3 text-right font-semibold text-emerald-400">
+                          {peso(p.amount)}
+                          {p.discount_amount > 0 && <div className="text-[11px] font-normal text-amber-400">−{peso(p.discount_amount)} lock-in</div>}
+                        </td>
                         <td className="px-2 py-3"><IconButton label="Void payment" icon={Trash2} size="icon-sm" onClick={() => setVoiding(p)} /></td>
                       </tr>
                     );

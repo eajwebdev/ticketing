@@ -123,11 +123,15 @@ class ClientSystemController extends Controller
         return response()->noContent();
     }
 
-    /** Mark the current due date as paid: records a sale and rolls the due date forward one cycle. */
+    /**
+     * Mark the current due date as paid: records a sale and rolls the due date
+     * forward — one cycle, or several when the client pays in advance.
+     */
     public function pay(Request $request, ClientSystem $clientSystem)
     {
         $data = $request->validate([
             'amount' => ['required', 'numeric', 'min:0', 'max:9999999999'],
+            'cycles' => ['sometimes', 'integer', 'min:1', 'max:24'],
             'paid_at' => ['required', 'date', 'before_or_equal:today'],
             'method' => ['required', Rule::in(SystemPayment::METHODS)],
             'reference' => ['nullable', 'string', 'max:255'],
@@ -136,11 +140,14 @@ class ClientSystemController extends Controller
 
         $payment = DB::transaction(function () use ($data, $clientSystem, $request) {
             $system = ClientSystem::lockForUpdate()->findOrFail($clientSystem->id);
+            $cycles = (int) ($data['cycles'] ?? 1);
             $covered = $system->next_due_date->copy();
-            $next = $system->nextDueDateAfter($covered);
+            $next = $system->dueDateAfterCycles($covered, $cycles);
 
             $payment = SystemPayment::create([
                 ...$data,
+                'cycles' => $cycles,
+                'discount_amount' => $system->discountAmount((float) $data['amount'], $cycles),
                 'client_system_id' => $system->id,
                 'client_id' => $system->client_id,
                 'system_type_id' => $system->system_type_id,
@@ -194,8 +201,11 @@ class ClientSystemController extends Controller
             'system_type_id' => ['required', 'exists:system_types,id'],
             'label' => ['nullable', 'string', 'max:255'],
             'amount' => ['required', 'numeric', 'min:0', 'max:9999999999'],
+            // Month-to-month price, used to show the lock-in discount on longer cycles.
+            'regular_monthly_rate' => ['nullable', 'numeric', 'min:0', 'max:9999999999'],
             'billing_cycle' => ['required', Rule::in(array_keys(ClientSystem::CYCLES))],
             'next_due_date' => ['required', 'date'],
+            'started_on' => ['nullable', 'date'],
             'status' => ['sometimes', Rule::in(ClientSystem::STATUSES)],
             'login_url' => ['nullable', 'string', 'max:500'],
             'username' => ['nullable', 'string', 'max:500'],
@@ -204,6 +214,14 @@ class ClientSystemController extends Controller
         ]);
 
         $data['next_due_date'] = Carbon::parse($data['next_due_date'])->startOfDay();
+        // Blank start date: new systems start on their first due date; edits keep what's saved.
+        if (empty($data['started_on'])) {
+            $data['started_on'] = $existing?->started_on ?? $data['next_due_date']->copy();
+        }
+        // A regular rate only means something for multi-month (lock-in) plans.
+        if ($data['billing_cycle'] === 'monthly') {
+            $data['regular_monthly_rate'] = null;
+        }
 
         return $data;
     }

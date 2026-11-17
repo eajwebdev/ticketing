@@ -24,7 +24,9 @@ class ClientController extends Controller
             $s = $request->search;
             $query->where(fn ($q) => $q->where('name', 'like', "%$s%")
                 ->orWhere('email', 'like', "%$s%")
-                ->orWhere('store_name', 'like', "%$s%"));
+                ->orWhere('store_name', 'like', "%$s%")
+                // JSON columns compare case-sensitively in MySQL — cast to text first.
+                ->orWhereRaw('LOWER(CAST(business_types AS CHAR)) LIKE ?', ['%'.mb_strtolower($s).'%']));
         }
 
         $perPage = min($request->integer('per_page', 15), 200);

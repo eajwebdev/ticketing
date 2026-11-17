@@ -10,6 +10,8 @@ import { ROLE_COLORS } from '@/lib/permissions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { TagInput } from '@/components/ui/tag-input';
+import { BUSINESS_TYPE_SUGGESTIONS } from '@/lib/businessTypes';
 import { UserAvatar } from '@/components/ui/avatar';
 import { Skeleton, EmptyState, IconButton, Spinner } from '@/components/ui/misc';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
@@ -242,7 +244,7 @@ function UserDialog({ user, catalog, isSelf, onClose, onCreated }) {
     department: user.department ?? '',
     phone: user.phone ?? '',
     store_name: user.store_name ?? '',
-    business_type: user.business_type ?? '',
+    business_types: user.business_types ?? [],
     contact_person: user.contact_person ?? '',
     address: user.address ?? '',
   });
@@ -309,9 +311,14 @@ function UserDialog({ user, catalog, isSelf, onClose, onCreated }) {
             {isClient ? (
               <>
                 <F label="Store / business name" e={err('store_name')}><Input value={form.store_name} onChange={set('store_name')} /></F>
-                <F label="Business type" e={err('business_type')}><Input value={form.business_type} onChange={set('business_type')} placeholder="e.g. Laundry Shop" /></F>
                 <F label="Contact person" e={err('contact_person')}><Input value={form.contact_person} onChange={set('contact_person')} /></F>
                 <F label="Address / branch" e={err('address')}><Input value={form.address} onChange={set('address')} /></F>
+                <div className="sm:col-span-2">
+                  <F label="Business types" e={err('business_types')}>
+                    <TagInput value={form.business_types} onChange={(v) => setForm({ ...form, business_types: v })}
+                      placeholder="e.g. Laundry Shop — press Enter to add" suggestions={BUSINESS_TYPE_SUGGESTIONS} />
+                  </F>
+                </div>
               </>
             ) : (
               <>

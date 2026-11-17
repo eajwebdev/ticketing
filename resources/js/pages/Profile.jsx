@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { TagInput } from '@/components/ui/tag-input';
+import { BUSINESS_TYPE_SUGGESTIONS } from '@/lib/businessTypes';
 import { UserAvatar } from '@/components/ui/avatar';
 import { Spinner } from '@/components/ui/misc';
 
@@ -21,7 +23,7 @@ export default function ProfilePage() {
   const [form, setForm] = useState({
     name: user.name ?? '', phone: user.phone ?? '', bio: user.bio ?? '',
     position: user.position ?? '', department: user.department ?? '',
-    store_name: user.store_name ?? '', business_type: user.business_type ?? '',
+    store_name: user.store_name ?? '', business_types: user.business_types ?? [],
     address: user.address ?? '', contact_person: user.contact_person ?? '',
   });
 
@@ -36,7 +38,13 @@ export default function ProfilePage() {
     e.preventDefault();
     setSaving(true);
     const fd = new FormData();
-    Object.entries(form).forEach(([k, v]) => fd.append(k, v ?? ''));
+    Object.entries(form).forEach(([k, v]) => {
+      if (Array.isArray(v)) {
+        // multipart arrays: name[]=a&name[]=b; an empty value clears the list
+        if (v.length) v.forEach((x) => fd.append(`${k}[]`, x));
+        else fd.append(k, '');
+      } else fd.append(k, v ?? '');
+    });
     if (avatar) fd.append('avatar', avatar);
     fd.append('_method', 'PATCH');
     try {
@@ -92,12 +100,13 @@ export default function ProfilePage() {
               <>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <Field label="Store / business name"><Input value={form.store_name} onChange={set('store_name')} /></Field>
-                  <Field label="Business type"><Input value={form.business_type} onChange={set('business_type')} /></Field>
-                </div>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <Field label="Contact person"><Input value={form.contact_person} onChange={set('contact_person')} /></Field>
-                  <Field label="Address"><Input value={form.address} onChange={set('address')} /></Field>
                 </div>
+                <Field label="Address"><Input value={form.address} onChange={set('address')} /></Field>
+                <Field label="Business types">
+                  <TagInput value={form.business_types} onChange={(v) => setForm({ ...form, business_types: v })}
+                    placeholder="e.g. Laundry Shop — press Enter to add" suggestions={BUSINESS_TYPE_SUGGESTIONS} />
+                </Field>
               </>
             )}
 

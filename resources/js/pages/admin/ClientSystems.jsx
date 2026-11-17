@@ -44,7 +44,12 @@ export default function ClientSystems() {
   const [state, setState] = useState(params.get('state') || 'all');
   const [dialog, setDialog] = useState(null); // {type: 'edit'|'pay'|'creds'|'history'|'delete', system}
 
-  const query = { per_page: 200, ...(search && { search }), ...(state !== 'all' && { state }) };
+  // ?client=12 — opened from a client's card: show only that client's systems.
+  const clientFilter = Number(params.get('client')) || null;
+  const query = {
+    per_page: 200, ...(search && { search }), ...(state !== 'all' && { state }),
+    ...(clientFilter && { client_id: clientFilter }),
+  };
   const { data, isLoading } = useQuery({
     queryKey: ['client-systems', query],
     queryFn: async () => (await api.get('/admin/client-systems', { params: query })).data,
@@ -64,7 +69,7 @@ export default function ClientSystems() {
     const el = document.getElementById(`cs-${focusId}`);
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      const t = setTimeout(() => setParams({}, { replace: true }), 4000);
+      const t = setTimeout(() => setParams((p) => { p.delete('focus'); return p; }, { replace: true }), 4000);
       return () => clearTimeout(t);
     }
   }, [focusId, systems.length, setParams]);
@@ -92,8 +97,21 @@ export default function ClientSystems() {
             {isAdmin ? 'Systems we manage for clients — due dates, payments and logins.' : 'Logins for the client systems you have access to.'}
           </p>
         </div>
-        {isAdmin && <Button onClick={() => open('edit')}><Plus /> Add System</Button>}
+        {isAdmin && (
+          <Button onClick={() => open('edit', clientFilter ? { client: { id: clientFilter } } : {})}><Plus /> Add System</Button>
+        )}
       </div>
+
+      {clientFilter && (
+        <div className="flex items-center gap-2 rounded-xl border border-crimson/30 bg-crimson/10 px-3 py-2 text-sm">
+          <span className="text-muted-foreground">Showing systems for</span>
+          <span className="font-medium text-mist">{systems[0]?.client?.store_name || systems[0]?.client?.name || 'this client'}</span>
+          <button type="button" className="ml-auto text-xs text-crimson-soft hover:underline"
+            onClick={() => { params.delete('client'); setParams(params, { replace: true }); }}>
+            Show all clients
+          </button>
+        </div>
+      )}
 
       {isAdmin && overview && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -185,6 +203,7 @@ function SystemRow({ s, isAdmin, canSeeCreds, focused, onAction }) {
           <div className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground">
             <UserAvatar user={s.client} className="h-4 w-4" />
             <span className="truncate">{s.client?.store_name || s.client?.name}</span>
+            {s.started_on && <span className="shrink-0 text-muted-foreground/70">· since {format(localDate(s.started_on), 'MMM yyyy')}</span>}
           </div>
         </div>
       </div>
@@ -193,7 +212,13 @@ function SystemRow({ s, isAdmin, canSeeCreds, focused, onAction }) {
         {isAdmin && (
           <div className="min-w-28">
             <div className="font-semibold text-white">{peso(s.amount)}<span className="text-xs font-normal text-muted-foreground">{CYCLE_SUFFIX[s.billing_cycle]}</span></div>
-            <div className="text-[11px] text-muted-foreground">{CYCLE_LABELS[s.billing_cycle]}</div>
+            {s.discount_amount > 0 ? (
+              <div className="text-[11px] text-amber-400" title={`Regular ${peso(s.regular_cycle_amount)} at ${peso(s.regular_monthly_rate)}/mo`}>
+                {CYCLE_LABELS[s.billing_cycle]} lock-in · saves {peso(s.discount_amount)} ({s.discount_percent}%)
+              </div>
+            ) : (
+              <div className="text-[11px] text-muted-foreground">{CYCLE_LABELS[s.billing_cycle]}</div>
+            )}
           </div>
         )}
         <div className="min-w-32">
@@ -242,8 +267,10 @@ function SystemDialog({ system, onClose, onSaved }) {
     system_type_id: system.system_type?.id ? String(system.system_type.id) : '',
     label: system.label ?? '',
     amount: system.amount ?? '',
+    regular_monthly_rate: system.regular_monthly_rate ?? '',
     billing_cycle: system.billing_cycle ?? 'monthly',
     next_due_date: system.next_due_date ?? '',
+    started_on: system.started_on ?? '',
     status: system.status ?? 'active',
     login_url: system.login_url ?? '',
     username: '',
@@ -310,8 +337,8 @@ function SystemDialog({ system, onClose, onSaved }) {
           </div>
 
           <Section title="Billing">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <F label="Amount (₱)" e={err('amount')}>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <F label={`Price per cycle (₱)`} e={err('amount')}>
                 <Input type="number" min="0" step="0.01" inputMode="decimal" value={form.amount} onChange={set('amount')} required />
               </F>
               <F label="Billing cycle" e={err('billing_cycle')}>
@@ -322,10 +349,19 @@ function SystemDialog({ system, onClose, onSaved }) {
                   </SelectContent>
                 </Select>
               </F>
-              <F label="Next due date" e={err('next_due_date')}>
+              <F label={isEdit ? 'Next due date' : 'First due date'} e={err('next_due_date')}>
                 <Input type="date" value={form.next_due_date} onChange={set('next_due_date')} required />
               </F>
+              <F label="Subscribed since (optional)" e={err('started_on')}>
+                <Input type="date" value={form.started_on} onChange={set('started_on')} max={todayISO()} />
+              </F>
             </div>
+            {form.billing_cycle !== 'monthly' && (
+              <LockInPanel form={form} setForm={setForm} err={err('regular_monthly_rate')} />
+            )}
+            <p className="text-[11px] text-muted-foreground">
+              Set the first due date — every “Mark paid” records a sale and moves it forward one {CYCLE_LABELS[form.billing_cycle].toLowerCase()} cycle.
+            </p>
           </Section>
 
           <Section title="Our login for this system" icon={Lock}>
@@ -361,11 +397,100 @@ function SystemDialog({ system, onClose, onSaved }) {
   );
 }
 
+const CYCLE_MONTHS = { monthly: 1, quarterly: 3, semiannual: 6, yearly: 12 };
+const CYCLE_UNIT = { monthly: 'month', quarterly: 'quarter', semiannual: 'half-year', yearly: 'year' };
+const round2 = (n) => Math.round(n * 100) / 100;
+
+/**
+ * Lock-in plans (quarterly / 6 months / yearly): compare the price to the
+ * client's regular month-to-month rate and show what they save.
+ */
+function LockInPanel({ form, setForm, err }) {
+  const months = CYCLE_MONTHS[form.billing_cycle] ?? 1;
+  const rate = parseFloat(form.regular_monthly_rate);
+  const amount = parseFloat(form.amount);
+  const hasRate = rate > 0;
+  const regular = hasRate ? round2(rate * months) : 0;
+  const saves = hasRate && amount >= 0 ? round2(regular - amount) : 0;
+  const pct = regular ? Math.round((saves / regular) * 1000) / 10 : 0;
+  const freeMonths = hasRate ? Math.round((saves / rate) * 10) / 10 : 0;
+  const cycle = CYCLE_LABELS[form.billing_cycle].toLowerCase();
+
+  const presets = [
+    { label: '5% off', amount: () => regular * 0.95 },
+    { label: '10% off', amount: () => regular * 0.9 },
+    { label: '15% off', amount: () => regular * 0.85 },
+    ...(months >= 6 ? [{ label: '1 month free', amount: () => rate * (months - 1) }] : []),
+    ...(months >= 12 ? [{ label: '2 months free', amount: () => rate * (months - 2) }] : []),
+  ];
+
+  return (
+    <div className="space-y-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <F label="Regular monthly rate (₱)" e={err}>
+          <Input type="number" min="0" step="0.01" inputMode="decimal" value={form.regular_monthly_rate}
+            onChange={(e) => setForm({ ...form, regular_monthly_rate: e.target.value })}
+            placeholder="What they'd pay month-to-month" />
+        </F>
+        <div className="space-y-2">
+          <Label>Lock-in discount</Label>
+          <div className="flex flex-wrap gap-1.5">
+            {presets.map((p) => (
+              <button key={p.label} type="button" disabled={!hasRate}
+                onClick={() => setForm({ ...form, amount: String(round2(p.amount())) })}
+                className="rounded-lg border border-navy-600 bg-navy-800/60 px-2 py-1 text-xs text-mist hover:border-amber-500/60 disabled:cursor-not-allowed disabled:opacity-40">
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      {hasRate ? (
+        <div className="grid grid-cols-3 gap-2 text-center text-xs">
+          <div className="rounded-lg bg-navy-800/60 p-2">
+            <div className="text-muted-foreground">Regular ({months} × {peso(rate)})</div>
+            <div className="mt-0.5 font-semibold text-mist">{peso(regular)}</div>
+          </div>
+          <div className="rounded-lg bg-navy-800/60 p-2">
+            <div className="text-muted-foreground">Lock-in price</div>
+            <div className="mt-0.5 font-semibold text-mist">{amount >= 0 ? peso(amount) : '—'}</div>
+          </div>
+          <div className={cn('rounded-lg p-2', saves > 0 ? 'bg-emerald-500/10' : saves < 0 ? 'bg-crimson/10' : 'bg-navy-800/60')}>
+            <div className="text-muted-foreground">{saves < 0 ? 'Costs more by' : 'Client saves'}</div>
+            <div className={cn('mt-0.5 font-semibold', saves > 0 ? 'text-emerald-400' : saves < 0 ? 'text-crimson-soft' : 'text-mist')}>
+              {peso(Math.abs(saves))}{saves > 0 && ` (${pct}%)`}
+            </div>
+          </div>
+          {saves > 0 && freeMonths >= 0.5 && (
+            <p className="col-span-3 text-[11px] text-muted-foreground">≈ {freeMonths} month{freeMonths === 1 ? '' : 's'} free every {cycle} cycle.</p>
+          )}
+        </div>
+      ) : (
+        <p className="text-[11px] text-muted-foreground">Enter their regular monthly rate to see how much this {cycle} lock-in saves them.</p>
+      )}
+    </div>
+  );
+}
+
+/** Mirrors ClientSystem::dueDateAfterCycles — same anchor-day rule as the server. */
+function dueAfterCycles(iso, cycle, anchorDay, cycles) {
+  const d = localDate(iso);
+  const months = (CYCLE_MONTHS[cycle] ?? 1) * cycles;
+  const target = new Date(d.getFullYear(), d.getMonth() + months, 1);
+  const daysInMonth = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(anchorDay || d.getDate(), daysInMonth));
+  return target;
+}
+
 function PayDialog({ system, onClose, onSaved }) {
   const [errors, setErrors] = useState({});
-  const [form, setForm] = useState({ amount: system.amount, paid_at: todayISO(), method: 'cash', reference: '', notes: '' });
+  const [form, setForm] = useState({ amount: system.amount, cycles: 1, paid_at: todayISO(), method: 'cash', reference: '', notes: '' });
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const err = (k) => errors[k]?.[0];
+  const cycles = Math.max(1, Math.min(24, Number(form.cycles) || 1));
+  const setCycles = (n) => setForm({ ...form, cycles: n, amount: round2(system.amount * n) });
+  const months = (CYCLE_MONTHS[system.billing_cycle] ?? 1) * cycles;
+  const nextDue = dueAfterCycles(system.next_due_date, system.billing_cycle, system.billing_anchor_day, cycles);
 
   const mutation = useMutation({
     mutationFn: async () => (await api.post(`/admin/client-systems/${system.id}/pay`, form)).data,
@@ -389,9 +514,33 @@ function PayDialog({ system, onClose, onSaved }) {
         <div className="rounded-xl border border-navy-600 bg-navy-800/50 p-3 text-sm">
           <div className="flex justify-between"><span className="text-muted-foreground">Settles due date</span><span className="text-mist">{fmtDate(system.next_due_date)}</span></div>
           <div className="mt-1 flex justify-between"><span className="text-muted-foreground">Cycle</span><span className="text-mist">{CYCLE_LABELS[system.billing_cycle]}</span></div>
-          <p className="mt-2 text-xs text-muted-foreground">The due date moves forward one cycle and this payment is recorded in Sales.</p>
+          {system.discount_amount > 0 && (
+            <div className="mt-1 flex justify-between">
+              <span className="text-muted-foreground">Lock-in discount</span>
+              <span className="text-amber-400">{peso(system.regular_cycle_amount)} − {peso(system.discount_amount)} ({system.discount_percent}%)</span>
+            </div>
+          )}
+          <div className="mt-1 flex justify-between">
+            <span className="text-muted-foreground">Next due date after this</span>
+            <span className="font-medium text-emerald-400">{format(nextDue, 'MMM d, yyyy')}</span>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            This payment is recorded in Sales and covers {months} month{months === 1 ? '' : 's'}.
+          </p>
         </div>
         <form onSubmit={(e) => { e.preventDefault(); setErrors({}); mutation.mutate(); }} className="space-y-4">
+          <F label="Paying for" e={err('cycles')}>
+            <div className="flex flex-wrap gap-1.5">
+              {[1, 2, 3, 6, 12].map((n) => (
+                <button key={n} type="button" onClick={() => setCycles(n)}
+                  className={cn('rounded-lg border px-3 py-1.5 text-xs transition-colors',
+                    cycles === n ? 'border-crimson bg-crimson/15 text-white' : 'border-navy-600 bg-navy-800/60 text-mist hover:border-crimson/50')}>
+                  {n === 1 ? `1 ${CYCLE_UNIT[system.billing_cycle]}` : `${n} ${CYCLE_UNIT[system.billing_cycle]}s`}
+                </button>
+              ))}
+            </div>
+            {cycles > 1 && <p className="text-[11px] text-muted-foreground">Advance payment — the due date jumps {cycles} cycles ahead.</p>}
+          </F>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <F label="Amount received (₱)" e={err('amount')}>
               <Input type="number" min="0" step="0.01" inputMode="decimal" value={form.amount} onChange={set('amount')} required />
@@ -510,7 +659,11 @@ function HistoryDialog({ system, onClose, onChanged }) {
               {data.map((p) => (
                 <div key={p.id} className="flex items-center gap-3 rounded-xl border border-navy-600 bg-navy-800/50 p-3">
                   <div className="min-w-0 flex-1">
-                    <div className="font-semibold text-white">{peso(p.amount)} <span className="text-xs font-normal text-muted-foreground">· {METHOD_LABELS[p.method]}{p.reference && ` · ${p.reference}`}</span></div>
+                    <div className="font-semibold text-white">
+                      {peso(p.amount)} <span className="text-xs font-normal text-muted-foreground">· {METHOD_LABELS[p.method]}{p.reference && ` · ${p.reference}`}</span>
+                      {p.cycles > 1 && <span className="ml-1 rounded bg-blue-500/15 px-1.5 py-0.5 text-[10px] font-medium text-blue-300">{p.cycles} cycles in advance</span>}
+                      {p.discount_amount > 0 && <span className="ml-1 text-xs font-normal text-amber-400">· {peso(p.discount_amount)} lock-in discount</span>}
+                    </div>
                     <div className="text-xs text-muted-foreground">
                       Paid {fmtDate(p.paid_at)} · settled due {fmtDate(p.covered_due_date)}{p.recorded_by && ` · by ${p.recorded_by.name}`}
                     </div>

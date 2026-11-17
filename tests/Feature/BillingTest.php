@@ -48,6 +48,97 @@ class BillingTest extends TestCase
         ]);
     }
 
+    public function test_yearly_lock_in_shows_discount_and_records_it_on_payment(): void
+    {
+        Sanctum::actingAs($this->admin);
+
+        // ₱1,500/mo regular → ₱18,000/yr; locked in at ₱15,000 (2 months free).
+        $res = $this->postJson('/api/v1/admin/client-systems', [
+            'client_id' => $this->client->id,
+            'system_type_id' => $this->type->id,
+            'amount' => 15000,
+            'regular_monthly_rate' => 1500,
+            'billing_cycle' => 'yearly',
+            'next_due_date' => '2026-01-31',
+        ])->assertCreated();
+
+        $res->assertJsonPath('data.regular_cycle_amount', 18000)
+            ->assertJsonPath('data.discount_amount', 3000)
+            ->assertJsonPath('data.discount_percent', 16.7);
+
+        $id = $res->json('data.id');
+
+        $pay = $this->postJson("/api/v1/admin/client-systems/{$id}/pay", [
+            'amount' => 15000, 'paid_at' => '2026-01-20', 'method' => 'gcash',
+        ])->assertCreated();
+
+        $pay->assertJsonPath('payment.discount_amount', 3000)
+            ->assertJsonPath('system.next_due_date', '2027-01-31'); // rolled forward one year
+
+        $this->getJson('/api/v1/admin/sales?from=2026-01-01&to=2026-12-31')
+            ->assertOk()
+            ->assertJsonPath('summary.range_total', 15000)
+            ->assertJsonPath('summary.range_discounts', 3000);
+
+        // Switching to monthly drops the regular rate (no lock-in discount on monthly plans).
+        $this->patchJson("/api/v1/admin/client-systems/{$id}", [
+            'client_id' => $this->client->id, 'system_type_id' => $this->type->id,
+            'amount' => 1500, 'regular_monthly_rate' => 1500, 'billing_cycle' => 'monthly',
+            'next_due_date' => '2027-01-31',
+        ])->assertOk()
+            ->assertJsonPath('data.regular_monthly_rate', null)
+            ->assertJsonPath('data.discount_amount', 0);
+    }
+
+    public function test_advance_payment_covers_several_cycles_and_void_restores_due_date(): void
+    {
+        Sanctum::actingAs($this->admin);
+        $system = $this->system(['regular_monthly_rate' => null]); // ₱1,500 monthly, due Jan 31
+
+        // Pays 3 months at once: Jan 31 → Apr 30 (anchor day 31, April has 30 days).
+        $pay = $this->postJson("/api/v1/admin/client-systems/{$system->id}/pay", [
+            'amount' => 4500, 'cycles' => 3, 'paid_at' => '2026-01-20', 'method' => 'cash',
+        ])->assertCreated()
+            ->assertJsonPath('payment.cycles', 3)
+            ->assertJsonPath('payment.covered_due_date', '2026-01-31')
+            ->assertJsonPath('system.next_due_date', '2026-04-30');
+
+        // Next single payment keeps the anchor: Apr 30 → May 31.
+        $this->postJson("/api/v1/admin/client-systems/{$system->id}/pay", [
+            'amount' => 1500, 'paid_at' => '2026-01-20', 'method' => 'cash',
+        ])->assertCreated()->assertJsonPath('system.next_due_date', '2026-05-31');
+
+        // Voiding the latest payment puts the due date back.
+        $latest = SystemPayment::latest('id')->first();
+        $this->deleteJson("/api/v1/admin/sales/{$latest->id}")->assertNoContent();
+        $this->assertSame('2026-04-30', $system->fresh()->next_due_date->toDateString());
+
+        $this->postJson("/api/v1/admin/client-systems/{$system->id}/pay", [
+            'amount' => 1, 'cycles' => 25, 'paid_at' => '2026-01-20', 'method' => 'cash',
+        ])->assertUnprocessable()->assertJsonValidationErrors('cycles');
+
+        $this->assertSame((int) $pay->json('payment.id'), (int) SystemPayment::first()->id);
+    }
+
+    public function test_started_on_defaults_to_first_due_date_and_is_kept_on_edit(): void
+    {
+        Sanctum::actingAs($this->admin);
+
+        $base = [
+            'client_id' => $this->client->id, 'system_type_id' => $this->type->id,
+            'amount' => 1500, 'billing_cycle' => 'monthly', 'next_due_date' => '2026-02-15',
+        ];
+        $id = $this->postJson('/api/v1/admin/client-systems', $base)
+            ->assertCreated()->assertJsonPath('data.started_on', '2026-02-15')->json('data.id');
+
+        $this->patchJson("/api/v1/admin/client-systems/{$id}", [...$base, 'started_on' => '2024-06-01'])
+            ->assertOk()->assertJsonPath('data.started_on', '2024-06-01');
+
+        // Editing without a start date keeps the saved one.
+        $this->patchJson("/api/v1/admin/client-systems/{$id}", [...$base, 'next_due_date' => '2026-03-15'])
+            ->assertOk()->assertJsonPath('data.started_on', '2024-06-01');
+    }
+
     public function test_admin_creates_system_with_encrypted_credentials(): void
     {
         Sanctum::actingAs($this->admin);

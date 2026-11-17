@@ -10,7 +10,7 @@ class SystemPayment extends Model
     public const METHODS = ['cash', 'gcash', 'maya', 'bank_transfer', 'check', 'other'];
 
     protected $fillable = [
-        'client_system_id', 'client_id', 'system_type_id', 'amount', 'paid_at',
+        'client_system_id', 'client_id', 'system_type_id', 'amount', 'discount_amount', 'cycles', 'paid_at',
         'covered_due_date', 'next_due_date', 'method', 'reference', 'notes', 'recorded_by',
     ];
 
@@ -18,6 +18,7 @@ class SystemPayment extends Model
     {
         return [
             'amount' => 'decimal:2',
+            'discount_amount' => 'decimal:2',
             'paid_at' => 'date',
             'covered_due_date' => 'date',
             'next_due_date' => 'date',

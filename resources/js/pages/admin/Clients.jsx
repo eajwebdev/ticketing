@@ -1,12 +1,17 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Building2, Search, UserPlus, Copy, CheckCircle2, Store, Check, X, Clock3, Pencil } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Building2, Search, UserPlus, Copy, CheckCircle2, Store, Check, X, Clock3, Pencil, ServerCog } from 'lucide-react';
 import api from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
+import { can, P } from '@/lib/permissions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { TagInput } from '@/components/ui/tag-input';
+import { BUSINESS_TYPE_SUGGESTIONS } from '@/lib/businessTypes';
 import { UserAvatar } from '@/components/ui/avatar';
 import { IconButton, Skeleton, EmptyState, Spinner } from '@/components/ui/misc';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -26,6 +31,9 @@ const APPROVAL_META = {
 
 export default function AdminClients() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const canSystems = can(user, P.BILLING) || can(user, P.SYSTEMS_VIEW);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
   const [dialog, setDialog] = useState(null); // null closed, {} add, {...client} edit
@@ -103,13 +111,24 @@ export default function AdminClients() {
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${meta.cls}`}>{meta.label}</span>
+                    {canSystems && c.approval_status === 'approved' && (
+                      <IconButton label="Systems & billing" icon={ServerCog} size="icon-sm"
+                        onClick={() => navigate(`/app/admin/client-systems?client=${c.id}`)} />
+                    )}
                     <IconButton label="Edit details" icon={Pencil} size="icon-sm" onClick={() => setDialog(c)} />
                   </div>
                 </div>
                 <div className="mt-4 space-y-1.5 text-xs text-muted-foreground">
                   <div className="truncate">✉ {c.email}</div>
                   {c.phone && <div>☎ {c.phone}</div>}
-                  {c.business_type && <div className="inline-flex items-center gap-1"><Store className="h-3 w-3" /> {c.business_type}</div>}
+                  {c.business_types?.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                      <Store className="h-3 w-3" />
+                      {c.business_types.map((t) => (
+                        <span key={t} className="rounded-md bg-navy-700/70 px-1.5 py-0.5 text-[10px] font-medium text-mist">{t}</span>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {c.approval_status === 'pending' && (
@@ -169,7 +188,7 @@ function ClientDialog({ client, onClose }) {
     name: client.name ?? '',
     store_name: client.store_name ?? '',
     email: client.email ?? '',
-    business_type: client.business_type ?? '',
+    business_types: client.business_types ?? [],
     contact_person: client.contact_person ?? '',
     phone: client.phone ?? '',
     address: client.address ?? '',
@@ -178,6 +197,7 @@ function ClientDialog({ client, onClose }) {
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const err = (k) => errors[k]?.[0];
+  const typeErr = Object.keys(errors).find((k) => k.startsWith('business_types.')) && 'Each business type must be under 100 characters.';
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -222,13 +242,16 @@ function ClientDialog({ client, onClose }) {
             <form onSubmit={(e) => { e.preventDefault(); setErrors({}); mutation.mutate(); }} className="space-y-4">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <F label="Store / business name" e={err('store_name')}><Input value={form.store_name} onChange={set('store_name')} required /></F>
-                <F label="Business type" e={err('business_type')}><Input value={form.business_type} onChange={set('business_type')} placeholder="e.g. Laundry Shop" /></F>
                 <F label="Contact name" e={err('name')}><Input value={form.name} onChange={set('name')} required /></F>
                 <F label="Contact person" e={err('contact_person')}><Input value={form.contact_person} onChange={set('contact_person')} /></F>
                 <F label="Email" e={err('email')}><Input type="email" value={form.email} onChange={set('email')} required /></F>
                 <F label="Phone" e={err('phone')}><Input value={form.phone} onChange={set('phone')} /></F>
+                <F label="Address / branch" e={err('address')}><Input value={form.address} onChange={set('address')} /></F>
               </div>
-              <F label="Address / branch" e={err('address')}><Input value={form.address} onChange={set('address')} /></F>
+              <F label="Business types" e={err('business_types') || typeErr}>
+                <TagInput value={form.business_types} onChange={(v) => setForm({ ...form, business_types: v })}
+                  placeholder="e.g. Laundry Shop — press Enter to add" suggestions={BUSINESS_TYPE_SUGGESTIONS} />
+              </F>
               <F label="Notes" e={err('notes')}><Textarea rows={3} value={form.notes} onChange={set('notes')} placeholder="Account notes, plan, special requirements…" /></F>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>

@@ -27,7 +27,7 @@ class ClientSystem extends Model
     public const DUE_SOON_DAYS = 7;
 
     protected $fillable = [
-        'client_id', 'system_type_id', 'label', 'amount', 'billing_cycle', 'next_due_date',
+        'client_id', 'system_type_id', 'label', 'amount', 'regular_monthly_rate', 'billing_cycle', 'started_on', 'next_due_date',
         'billing_anchor_day', 'status', 'login_url', 'username', 'password', 'notes',
         'last_reminded_on', 'created_by',
     ];
@@ -40,7 +40,9 @@ class ClientSystem extends Model
     {
         return [
             'amount' => 'decimal:2',
+            'regular_monthly_rate' => 'decimal:2',
             'next_due_date' => 'date',
+            'started_on' => 'date',
             'last_reminded_on' => 'date',
             'username' => 'encrypted',
             'password' => 'encrypted',
@@ -55,6 +57,7 @@ class ClientSystem extends Model
         // paid deliberately does NOT re-anchor.
         static::creating(function (ClientSystem $system) {
             $system->billing_anchor_day ??= $system->next_due_date->day;
+            $system->started_on ??= $system->next_due_date->copy();
         });
     }
 
@@ -131,6 +134,49 @@ class ClientSystem extends Model
     public function monthlyValue(): float
     {
         return (float) $this->amount / (self::CYCLES[$this->billing_cycle] ?? 1);
+    }
+
+    public function months(): int
+    {
+        return self::CYCLES[$this->billing_cycle] ?? 1;
+    }
+
+    /**
+     * What one cycle would cost at the regular month-to-month rate
+     * (e.g. ₱1,500 × 12 = ₱18,000 for a yearly plan). Null when no regular rate is set.
+     */
+    public function regularCycleAmount(): ?float
+    {
+        return $this->regular_monthly_rate === null
+            ? null
+            : round((float) $this->regular_monthly_rate * $this->months(), 2);
+    }
+
+    /** How much the client saves versus paying monthly, over $cycles cycles (never negative). */
+    public function discountAmount(?float $paid = null, int $cycles = 1): float
+    {
+        $regular = $this->regularCycleAmount();
+        $paid ??= (float) $this->amount * $cycles;
+
+        return $regular === null ? 0.0 : max(0.0, round($regular * $cycles - $paid, 2));
+    }
+
+    /** The due date after paying $cycles cycles starting from $from. */
+    public function dueDateAfterCycles(CarbonInterface $from, int $cycles): Carbon
+    {
+        $date = Carbon::parse($from);
+        for ($i = 0; $i < max(1, $cycles); $i++) {
+            $date = $this->nextDueDateAfter($date);
+        }
+
+        return $date;
+    }
+
+    public function discountPercent(): float
+    {
+        $regular = $this->regularCycleAmount();
+
+        return $regular ? round($this->discountAmount() / $regular * 100, 1) : 0.0;
     }
 
     public function displayName(): string

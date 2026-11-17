@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\Role;
 use App\Support\Permissions;
 use Database\Factories\UserFactory;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -23,7 +24,7 @@ class User extends Authenticatable
         'password',
         'role',
         'store_name',
-        'business_type',
+        'business_types',
         'address',
         'contact_person',
         'phone',
@@ -56,6 +57,28 @@ class User extends Authenticatable
             'permissions' => 'array',
             'approved_at' => 'datetime',
         ];
+    }
+
+    /**
+     * A client's kinds of business (e.g. ["Laundry Shop", "Water Refilling"]).
+     * Saved trimmed, de-duplicated (case-insensitive) and null when empty.
+     */
+    protected function businessTypes(): Attribute
+    {
+        return Attribute::make(
+            get: fn (?string $value) => $value ? (json_decode($value, true) ?: []) : [],
+            set: function ($value) {
+                $types = [];
+                foreach ((array) $value as $t) {
+                    $t = trim((string) $t);
+                    if ($t !== '' && ! in_array(mb_strtolower($t), array_map('mb_strtolower', $types), true)) {
+                        $types[] = $t;
+                    }
+                }
+
+                return $types ? json_encode($types, JSON_UNESCAPED_UNICODE) : null;
+            },
+        );
     }
 
     public function isApproved(): bool

@@ -18,13 +18,13 @@ export function AuthShell({ title, subtitle, children, footer }) {
             initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
             className="max-w-md text-3xl font-bold leading-tight text-white"
           >
-            Support that proves <span className="grad-text">EAJ cares</span> — tracked from first message to resolved.
+            Your EAJ system, <span className="grad-text">fully supported</span> — from first message to resolved.
           </motion.h2>
           <div className="space-y-3">
             {[
-              { icon: Zap, text: 'Lightning-fast response times, measured and visible' },
-              { icon: MessagesSquare, text: 'Real-time chat with the humans behind your system' },
-              { icon: ShieldCheck, text: 'Full transparency: who accepted, who solved, how long' },
+              { icon: MessagesSquare, text: 'Chat live with the developers who built your system' },
+              { icon: Zap, text: 'Response targets by urgency — critical issues first' },
+              { icon: ShieldCheck, text: 'See who’s on it, what’s been done, and how long it took' },
             ].map(({ icon: Icon, text }, i) => (
               <motion.div
                 key={i}
@@ -36,6 +36,14 @@ export function AuthShell({ title, subtitle, children, footer }) {
               </motion.div>
             ))}
           </div>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }} className="pt-4">
+            <div className="mb-2 text-[11px] uppercase tracking-[0.18em] text-mist/50">Supporting</div>
+            <div className="flex flex-wrap gap-2">
+              {['Laundry', 'Grocery POS', 'Cafe & Restaurant', 'Pharmacy', 'Inventory', 'Hardware', 'Construction', 'HR & Payroll', 'Water Refilling', 'Condo & Resort', 'Websites'].map((s) => (
+                <span key={s} className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] text-mist/85">{s}</span>
+              ))}
+            </div>
+          </motion.div>
         </div>
         <div className="relative z-10 text-xs text-mist/50">© {new Date().getFullYear()} EAJ Systems. All rights reserved.</div>
       </div>

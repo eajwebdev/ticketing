@@ -115,7 +115,7 @@ class LeadController extends Controller
                 'password' => $tempPassword,
                 'role' => Role::Customer,
                 'store_name' => $lead->business_name,
-                'business_type' => $lead->business_type,
+                'business_types' => $lead->business_type ? [$lead->business_type] : null,
                 'contact_person' => $lead->contact_person,
                 'phone' => $lead->phone,
                 'notes' => $lead->notes,

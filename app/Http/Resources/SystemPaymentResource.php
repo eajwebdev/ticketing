@@ -13,6 +13,8 @@ class SystemPaymentResource extends JsonResource
             'id' => $this->id,
             'client_system_id' => $this->client_system_id,
             'amount' => (float) $this->amount,
+            'discount_amount' => (float) $this->discount_amount,
+            'cycles' => (int) ($this->cycles ?? 1),
             'paid_at' => $this->paid_at->toDateString(),
             'covered_due_date' => $this->covered_due_date->toDateString(),
             'next_due_date' => $this->next_due_date->toDateString(),

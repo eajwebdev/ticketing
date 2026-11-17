@@ -55,6 +55,7 @@ class SalesController extends Controller
             'summary' => [
                 'range_total' => (float) $filtered()->sum('amount'),
                 'range_count' => $filtered()->count(),
+                'range_discounts' => (float) $filtered()->sum('discount_amount'),
                 'this_month' => $sum(today()->startOfMonth()->toDateString(), today()->endOfMonth()->toDateString()),
                 'last_month' => $sum(today()->subMonthNoOverflow()->startOfMonth()->toDateString(), today()->subMonthNoOverflow()->endOfMonth()->toDateString()),
                 'this_year' => $sum(today()->startOfYear()->toDateString(), today()->endOfYear()->toDateString()),
@@ -99,7 +100,7 @@ class SalesController extends Controller
 
         return response()->streamDownload(function () use ($rows) {
             $out = fopen('php://output', 'w');
-            fputcsv($out, ['Paid on', 'Client', 'System', 'Label', 'Amount (PHP)', 'Method', 'Reference', 'Covered due date', 'Recorded by']);
+            fputcsv($out, ['Paid on', 'Client', 'System', 'Label', 'Amount (PHP)', 'Lock-in discount (PHP)', 'Method', 'Reference', 'Covered due date', 'Recorded by']);
             foreach ($rows as $p) {
                 fputcsv($out, [
                     $p->paid_at->toDateString(),
@@ -107,6 +108,7 @@ class SalesController extends Controller
                     $p->systemType?->name,
                     $p->clientSystem?->label,
                     number_format((float) $p->amount, 2, '.', ''),
+                    number_format((float) $p->discount_amount, 2, '.', ''),
                     $p->method,
                     $p->reference,
                     $p->covered_due_date->toDateString(),

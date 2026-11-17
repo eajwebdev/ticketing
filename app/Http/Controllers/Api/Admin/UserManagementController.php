@@ -127,7 +127,8 @@ class UserManagementController extends Controller
             'position' => ['sometimes', 'nullable', 'string', 'max:255'],
             'department' => ['sometimes', 'nullable', 'string', 'max:255'],
             'store_name' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'business_type' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'business_types' => ['sometimes', 'nullable', 'array', 'max:20'],
+            'business_types.*' => ['nullable', 'string', 'max:100'],
             'contact_person' => ['sometimes', 'nullable', 'string', 'max:255'],
             'address' => ['sometimes', 'nullable', 'string', 'max:500'],
         ]);

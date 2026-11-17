@@ -2,6 +2,7 @@ import {
   WashingMachine, UtensilsCrossed, Store, Pill, Boxes, Monitor, Truck, Building2,
   ShoppingCart, CreditCard, Stethoscope, Coffee, Scissors, Wrench, GraduationCap,
   Warehouse, Hotel, Car, Dumbbell, Users, Droplets, LayoutGrid,
+  Globe, Hammer, HardHat, Palmtree,
 } from 'lucide-react';
 
 /**
@@ -30,6 +31,10 @@ export const SYSTEM_ICONS = {
   Dumbbell,
   Users,
   Droplets,
+  Globe,
+  Hammer,
+  HardHat,
+  Palmtree,
 };
 
 export const FALLBACK_ICON = LayoutGrid;

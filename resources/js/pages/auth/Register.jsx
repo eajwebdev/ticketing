@@ -4,13 +4,14 @@ import { toast } from 'sonner';
 import { UserPlus, Clock3, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { AuthShell } from './AuthShell';
+import { GoogleSignInButton, OrDivider } from '@/components/auth/GoogleSignInButton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/misc';
 
 export default function Register() {
-  const { register } = useAuth();
+  const { register, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({
     name: '', store_name: '', email: '', phone: '', password: '', password_confirmation: '',
@@ -35,6 +36,26 @@ export default function Register() {
       }
     } catch (err) {
       setErrors(err.response?.data?.errors || { general: [err.response?.data?.message || 'Registration failed'] });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Signing up with Google: an existing approved account just signs in;
+  // otherwise a pending client account is created.
+  const google = async (credential) => {
+    setLoading(true);
+    setErrors({});
+    try {
+      const result = await loginWithGoogle(credential);
+      if (result.approved) {
+        toast.success('Welcome to EAJ Support!');
+        navigate('/app', { replace: true });
+      } else {
+        setPending(result.message);
+      }
+    } catch (err) {
+      setErrors({ general: [err.response?.data?.message || 'Google sign-up failed. Please try again.'] });
     } finally {
       setLoading(false);
     }
@@ -69,6 +90,10 @@ export default function Register() {
       subtitle="Submit and track support tickets for your business."
       footer={<>Already have an account? <Link to="/login" className="font-medium text-crimson-soft hover:underline">Sign in</Link></>}
     >
+      <div className="mb-5 space-y-5">
+        <GoogleSignInButton onCredential={google} text="signup_with" disabled={loading} onUnavailable={(m) => toast.info(m)} />
+        <OrDivider label="or register with email" />
+      </div>
       <form onSubmit={submit} className="space-y-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-2">
