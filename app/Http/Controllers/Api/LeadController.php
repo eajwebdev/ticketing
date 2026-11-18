@@ -51,8 +51,10 @@ class LeadController extends Controller
             'summary' => [
                 'open' => Lead::whereIn('stage', Lead::OPEN_STAGES)->count(),
                 'pipeline_value' => (float) Lead::whereIn('stage', Lead::OPEN_STAGES)->sum('estimated_value'),
+                'pipeline_monthly' => (float) Lead::whereIn('stage', Lead::OPEN_STAGES)->sum('monthly_fee'),
                 'won_this_month' => (clone $wonThisMonth)->count(),
                 'won_value_this_month' => (float) (clone $wonThisMonth)->sum('estimated_value'),
+                'won_monthly_this_month' => (float) (clone $wonThisMonth)->sum('monthly_fee'),
                 'win_rate_this_month' => $closedCount ? round((clone $wonThisMonth)->count() / $closedCount * 100) : null,
                 'follow_ups_due' => Lead::whereIn('stage', Lead::OPEN_STAGES)->whereDate('next_follow_up', '<=', today())->count(),
             ],
@@ -153,6 +155,7 @@ class LeadController extends Controller
             'source' => ['sometimes', Rule::in(Lead::SOURCES)],
             'system_type_id' => ['sometimes', 'nullable', 'exists:system_types,id'],
             'estimated_value' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:9999999999'],
+            'monthly_fee' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:9999999999'],
             'stage' => ['sometimes', Rule::in(Lead::STAGES)],
             'owner_id' => ['sometimes', 'nullable', Rule::exists('users', 'id')->whereIn('role', Role::teamValues())],
             'next_follow_up' => ['sometimes', 'nullable', 'date'],

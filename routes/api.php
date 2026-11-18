@@ -113,6 +113,7 @@ Route::prefix('v1')->group(function () {
                 Route::patch('client-systems/{clientSystem}', [ClientSystemController::class, 'update']);
                 Route::delete('client-systems/{clientSystem}', [ClientSystemController::class, 'destroy']);
                 Route::post('client-systems/{clientSystem}/pay', [ClientSystemController::class, 'pay']);
+                Route::post('client-systems/{clientSystem}/pay-setup', [ClientSystemController::class, 'paySetup']);
                 Route::get('client-systems/{clientSystem}/payments', [ClientSystemController::class, 'payments']);
 
                 Route::get('sales', [SalesController::class, 'index']);

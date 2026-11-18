@@ -12,6 +12,7 @@ class SystemPaymentResource extends JsonResource
         return [
             'id' => $this->id,
             'client_system_id' => $this->client_system_id,
+            'kind' => $this->kind ?? 'subscription',
             'amount' => (float) $this->amount,
             'discount_amount' => (float) $this->discount_amount,
             'cycles' => (int) ($this->cycles ?? 1),

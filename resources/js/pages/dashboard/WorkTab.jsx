@@ -80,7 +80,7 @@ export default function WorkTab({ data }) {
       {leads && (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
           <Panel className="lg:col-span-2" title="Sales pipeline" icon={Target}
-            subtitle={`${peso(leads.pipeline_value)} in ${leads.open} open lead${leads.open === 1 ? '' : 's'} · ${leads.won_this_month} won this month`}
+            subtitle={`${peso(leads.pipeline_value)} setup${leads.pipeline_monthly > 0 ? ` + ${peso(leads.pipeline_monthly)}/mo` : ''} in ${leads.open} open lead${leads.open === 1 ? '' : 's'} · ${leads.won_this_month} won this month`}
             action={<PanelLink to="/app/leads">Leads</PanelLink>}>
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
               {leads.stages.map((st) => (

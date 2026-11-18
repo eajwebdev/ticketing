@@ -155,7 +155,7 @@ class TeamWorkTest extends TestCase
         Task::create(['title' => 'Late', 'assignee_id' => $dev->id, 'due_date' => '2026-03-08']);
         Task::create(['title' => 'Later', 'assignee_id' => $dev->id, 'due_date' => '2026-03-20']);
         Task::create(['title' => 'Done', 'assignee_id' => $dev->id, 'due_date' => '2026-03-01', 'status' => 'done']);
-        Lead::create(['business_name' => 'Cafe Uno', 'owner_id' => $mkt->id, 'next_follow_up' => '2026-03-10']);
+        $cafe = Lead::create(['business_name' => 'Cafe Uno', 'owner_id' => $mkt->id, 'next_follow_up' => '2026-03-10']);
         Lead::create(['business_name' => 'Lost Co', 'owner_id' => $mkt->id, 'next_follow_up' => '2026-03-01', 'stage' => 'lost']);
 
         $this->artisan('work:remind')->assertSuccessful();
@@ -164,7 +164,7 @@ class TeamWorkTest extends TestCase
         $this->assertSame(1, $dev->notifications()->count());
         $this->assertStringContainsString('overdue by 2 days', $dev->notifications()->first()->data['message']);
         $this->assertSame(1, $mkt->notifications()->count());
-        $this->assertSame('/app/leads?lead=1', $mkt->notifications()->first()->data['link']);
+        $this->assertSame("/app/leads?lead={$cafe->id}", $mkt->notifications()->first()->data['link']);
     }
 
     // ---------------- Leads ----------------

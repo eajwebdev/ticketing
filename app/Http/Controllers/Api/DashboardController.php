@@ -92,7 +92,11 @@ class DashboardController extends Controller
                 'overdue_amount' => round((float) ClientSystem::overdue()->sum('amount'), 2),
                 'due_soon_count' => ClientSystem::dueSoon()->count(),
                 'due_soon_amount' => round((float) ClientSystem::dueSoon()->sum('amount'), 2),
+                'setup_unpaid_count' => ClientSystem::setupUnpaid()->count(),
+                'setup_unpaid_amount' => round((float) ClientSystem::setupUnpaid()->sum('setup_fee'), 2),
             ],
+            'setup_revenue' => round((float) SystemPayment::where('kind', 'setup')
+                ->whereBetween('paid_at', [$monthStart->toDateString(), today()->endOfMonth()->toDateString()])->sum('amount'), 2),
             'mrr' => round($active->sum(fn ($s) => $s->monthlyValue()), 2),
             'active_systems' => $active->count(),
             'trend' => $this->monthlyTrend(6),
@@ -111,6 +115,7 @@ class DashboardController extends Controller
                     'client' => $p->client?->store_name ?: $p->client?->name,
                     'system' => $p->clientSystem?->displayName(),
                     'amount' => (float) $p->amount,
+                    'kind' => $p->kind ?? 'subscription',
                     'paid_at' => Carbon::parse($p->paid_at)->toDateString(),
                     'method' => $p->method,
                 ]),
@@ -240,6 +245,7 @@ class DashboardController extends Controller
                     'stage' => $s, 'count' => (int) ($stages[$s]->c ?? 0), 'value' => round((float) ($stages[$s]->v ?? 0), 2),
                 ])->values(),
                 'pipeline_value' => round((float) Lead::whereIn('stage', $open)->sum('estimated_value'), 2),
+                'pipeline_monthly' => round((float) Lead::whereIn('stage', $open)->sum('monthly_fee'), 2),
                 'open' => Lead::whereIn('stage', $open)->count(),
                 'won_this_month' => Lead::where('stage', 'won')->where('converted_at', '>=', today()->startOfMonth())->count(),
                 'follow_ups' => Lead::with('owner:id,name')->whereIn('stage', $open)
@@ -250,6 +256,7 @@ class DashboardController extends Controller
                         'next_follow_up' => $l->next_follow_up->toDateString(),
                         'is_overdue' => $l->next_follow_up->lt(today()),
                         'owner' => $l->owner?->name, 'value' => (float) $l->estimated_value,
+                        'monthly_fee' => (float) $l->monthly_fee,
                     ]),
             ];
         }
@@ -286,6 +293,12 @@ class DashboardController extends Controller
                     'kind' => 'billing', 'severity' => 3, 'title' => ($s->client?->store_name ?: $s->client?->name).' is overdue',
                     'subtitle' => $s->displayName().' · ₱'.number_format((float) $s->amount, 2).' since '.$s->next_due_date->format('M j'),
                     'link' => "/app/admin/client-systems?focus={$s->id}", 'at' => $s->next_due_date,
+                ]));
+            ClientSystem::with(['client', 'systemType'])->setupUnpaid()->orderBy('started_on')->limit(5)->get()
+                ->each(fn ($s) => $items->push([
+                    'kind' => 'setup', 'severity' => 1, 'title' => 'Setup fee unpaid: '.($s->client?->store_name ?: $s->client?->name),
+                    'subtitle' => $s->displayName().' · ₱'.number_format((float) $s->setup_fee, 2).' one-time',
+                    'link' => "/app/admin/client-systems?focus={$s->id}", 'at' => $s->started_on ?? $s->created_at,
                 ]));
         }
 

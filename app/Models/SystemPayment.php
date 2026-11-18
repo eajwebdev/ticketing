@@ -7,10 +7,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SystemPayment extends Model
 {
+    public const KINDS = ['subscription', 'setup'];
+
     public const METHODS = ['cash', 'gcash', 'maya', 'bank_transfer', 'check', 'other'];
 
     protected $fillable = [
-        'client_system_id', 'client_id', 'system_type_id', 'amount', 'discount_amount', 'cycles', 'paid_at',
+        'client_system_id', 'kind', 'client_id', 'system_type_id', 'amount', 'discount_amount', 'cycles', 'paid_at',
         'covered_due_date', 'next_due_date', 'method', 'reference', 'notes', 'recorded_by',
     ];
 
@@ -24,6 +26,8 @@ class SystemPayment extends Model
             'next_due_date' => 'date',
         ];
     }
+
+    protected $attributes = ['kind' => 'subscription'];
 
     public function clientSystem(): BelongsTo
     {

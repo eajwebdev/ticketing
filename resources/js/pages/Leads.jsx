@@ -96,9 +96,14 @@ export default function Leads() {
       {s && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <StatCard index={0} icon={Target} label="Open leads" value={s.open} accent="#3B82F6" />
-          <StatCard index={1} icon={Wallet} label="Pipeline value" value={peso(s.pipeline_value)} accent="#8B5CF6" />
+          <StatCard index={1} icon={Wallet} label="Pipeline · one-time setup" value={peso(s.pipeline_value)} accent="#8B5CF6"
+            sub={s.pipeline_monthly > 0 ? `+ ${peso(s.pipeline_monthly)}/mo subscriptions` : undefined} />
           <StatCard index={2} icon={Trophy} label="Won this month" value={s.won_this_month}
-            sub={s.win_rate_this_month != null ? `${s.win_rate_this_month}% win rate · ${peso(s.won_value_this_month)}` : peso(s.won_value_this_month)} accent="#22C55E" />
+            sub={[
+              s.win_rate_this_month != null ? `${s.win_rate_this_month}% win rate` : null,
+              peso(s.won_value_this_month),
+              s.won_monthly_this_month > 0 ? `+ ${peso(s.won_monthly_this_month)}/mo` : null,
+            ].filter(Boolean).join(' · ')} accent="#22C55E" />
           <StatCard index={3} icon={BellRing} label="Follow-ups due" value={s.follow_ups_due} accent="#E91E4F" />
         </div>
       )}
@@ -131,6 +136,7 @@ export default function Leads() {
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-6">
           {STAGES.map((st) => {
             const total = byStage[st.key].reduce((a, l) => a + (l.estimated_value || 0), 0);
+            const monthly = byStage[st.key].reduce((a, l) => a + (l.monthly_fee || 0), 0);
             return (
               <div key={st.key}
                 onDragOver={(e) => { e.preventDefault(); setOverCol(st.key); }}
@@ -143,7 +149,11 @@ export default function Leads() {
                     <span className="flex items-center gap-2 text-sm font-semibold text-mist"><span className="h-2.5 w-2.5 rounded-full" style={{ background: st.color }} />{st.label}</span>
                     <span className="rounded-full bg-navy-700 px-2 text-xs text-muted-foreground">{byStage[st.key].length}</span>
                   </div>
-                  {total > 0 && <div className="mt-0.5 text-[11px] text-muted-foreground">{peso(total)}</div>}
+                  {(total > 0 || monthly > 0) && (
+                    <div className="mt-0.5 text-[11px] text-muted-foreground">
+                      {[total > 0 && peso(total), monthly > 0 && `${peso(monthly)}/mo`].filter(Boolean).join(' + ')}
+                    </div>
+                  )}
                 </div>
                 <div className="flex flex-1 flex-col gap-2">
                   {byStage[st.key].map((l) => (
@@ -165,6 +175,30 @@ export default function Leads() {
   );
 }
 
+/** Deal price: a one-time setup fee and/or a monthly subscription. Either can be blank. */
+function DealPricing({ form, set, err }) {
+  const setup = parseFloat(form.estimated_value) || 0;
+  const monthly = parseFloat(form.monthly_fee) || 0;
+  return (
+    <div className="space-y-3 rounded-xl border border-navy-600/70 bg-navy-800/40 p-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <F label="One-time setup fee (₱)" e={err('estimated_value')}>
+          <Input type="number" min="0" step="0.01" inputMode="decimal" value={form.estimated_value} onChange={set('estimated_value')} placeholder="e.g. 10000" />
+        </F>
+        <F label="Monthly subscription (₱)" e={err('monthly_fee')}>
+          <Input type="number" min="0" step="0.01" inputMode="decimal" value={form.monthly_fee} onChange={set('monthly_fee')} placeholder="e.g. 1500" />
+        </F>
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        {setup > 0 || monthly > 0
+          ? <>Deal: <span className="font-medium text-mist">{[setup > 0 && `${peso(setup)} setup`, monthly > 0 && `${peso(monthly)}/month`].filter(Boolean).join(' + ')}</span>
+              {setup > 0 && monthly > 0 && <> · first year ≈ <span className="font-medium text-mist">{peso(setup + monthly * 12)}</span></>}</>
+          : 'Leave either blank if the deal is setup-only or subscription-only.'}
+      </p>
+    </div>
+  );
+}
+
 function LeadCard({ l, dragging, onOpen, onDragStart, onDragEnd }) {
   return (
     <div draggable onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; onDragStart(); }} onDragEnd={onDragEnd}
@@ -174,10 +208,21 @@ function LeadCard({ l, dragging, onOpen, onDragStart, onDragEnd }) {
         dragging && 'opacity-40', l.follow_up_due && 'border-crimson/40')}>
       <div className="text-sm font-semibold leading-snug text-mist">{l.business_name}</div>
       {l.contact_person && <div className="truncate text-xs text-muted-foreground">{l.contact_person}</div>}
-      <div className="mt-2 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
-        {l.system_type && <span className="truncate">{l.system_type.name}</span>}
-        {l.estimated_value != null && <span className="font-medium text-mist">{peso(l.estimated_value)}</span>}
-      </div>
+      {l.system_type && <div className="mt-2 truncate text-[11px] text-muted-foreground">{l.system_type.name}</div>}
+      {(l.estimated_value > 0 || l.monthly_fee > 0) && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1">
+          {l.estimated_value > 0 && (
+            <span className="rounded-md bg-violet-500/12 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-violet-400" title="One-time setup fee">
+              {peso(l.estimated_value)} <span className="font-normal opacity-80">setup</span>
+            </span>
+          )}
+          {l.monthly_fee > 0 && (
+            <span className="rounded-md bg-blue-500/12 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-blue-400" title="Monthly subscription">
+              {peso(l.monthly_fee)}<span className="font-normal opacity-80">/mo</span>
+            </span>
+          )}
+        </div>
+      )}
       <div className="mt-2 flex items-center justify-between">
         {l.converted_client ? (
           <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400"><UserCheck className="h-3 w-3" /> Client</span>
@@ -208,6 +253,7 @@ function LeadDialog({ lead, members, onClose, onConvert }) {
     source: lead.source ?? 'facebook',
     system_type_id: lead.system_type?.id ? String(lead.system_type.id) : '',
     estimated_value: lead.estimated_value ?? '',
+    monthly_fee: lead.monthly_fee ?? '',
     stage: lead.stage ?? 'new',
     owner_id: lead.owner?.id ? String(lead.owner.id) : String(user.id),
     next_follow_up: lead.next_follow_up ?? '',
@@ -263,7 +309,7 @@ function LeadDialog({ lead, members, onClose, onConvert }) {
               </Select>
             </F>
           </div>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
             <F label="Stage">
               <Select value={form.stage} onValueChange={set('stage')}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -276,9 +322,9 @@ function LeadDialog({ lead, members, onClose, onConvert }) {
                 <SelectContent>{Object.entries(SOURCES).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
               </Select>
             </F>
-            <F label="Est. value (₱)" e={err('estimated_value')}><Input type="number" min="0" step="0.01" value={form.estimated_value} onChange={set('estimated_value')} /></F>
-            <F label="Next follow-up" e={err('next_follow_up')}><Input type="date" value={form.next_follow_up} onChange={set('next_follow_up')} /></F>
+            <F label="Next follow-up" e={err('next_follow_up')} className="col-span-2 sm:col-span-1"><Input type="date" value={form.next_follow_up} onChange={set('next_follow_up')} /></F>
           </div>
+          <DealPricing form={form} set={set} err={err} />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <F label="Owner">
               <Select value={form.owner_id || NONE} onValueChange={(v) => setForm({ ...form, owner_id: v === NONE ? '' : v })}>
@@ -376,6 +422,6 @@ function ConvertDialog({ lead, onClose }) {
   );
 }
 
-function F({ label, e, children }) {
-  return <div className="space-y-1.5"><Label>{label}</Label>{children}{e && <p className="text-xs text-crimson-soft">{e}</p>}</div>;
+function F({ label, e, children, className }) {
+  return <div className={cn("space-y-1.5", className)}><Label>{label}</Label>{children}{e && <p className="text-xs text-crimson-soft">{e}</p>}</div>;
 }

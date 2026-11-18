@@ -33,6 +33,12 @@ class ClientSystemResource extends JsonResource
             // Billing details are admin-only; staff with credential access just see the system.
             'amount' => $this->when($isAdmin, fn () => (float) $this->amount),
             'billing_cycle' => $this->when($isAdmin, $this->billing_cycle),
+            'setup_fee' => $this->when($isAdmin, fn () => $this->setup_fee === null ? null : (float) $this->setup_fee),
+            'setup_paid_at' => $this->when($isAdmin, fn () => $this->setup_paid_at?->toDateString()),
+            'setup_state' => $this->when($isAdmin, fn () => $this->setupState()),
+            // True when the setup fee was paid through "Record setup payment" (it's in Sales).
+            'setup_recorded' => $this->when($isAdmin, fn () => (bool) ($this->setup_recorded
+                ?? $this->resource->payments()->where('kind', 'setup')->exists())),
             'regular_monthly_rate' => $this->when($isAdmin, fn () => $this->regular_monthly_rate === null ? null : (float) $this->regular_monthly_rate),
             'regular_cycle_amount' => $this->when($isAdmin, fn () => $this->regularCycleAmount()),
             'discount_amount' => $this->when($isAdmin, fn () => $this->discountAmount()),

@@ -111,7 +111,7 @@ export default function Sales() {
             <StatCard index={0} icon={Wallet} label="This month" value={peso(s.this_month)} trend={monthTrend} sub={`Last month ${peso(s.last_month)}`} accent="#22C55E" />
             <StatCard index={1} icon={CalendarDays} label="This year" value={peso(s.this_year)} accent="#3B82F6" />
             <StatCard index={2} icon={TrendingUp} label="All time" value={peso(s.all_time)} accent="#8B5CF6" />
-            <StatCard index={3} icon={Receipt} label="In selected range" value={peso(s.range_total)} sub={`${s.range_count} payment${s.range_count === 1 ? '' : 's'}${s.range_discounts > 0 ? ` · ${peso(s.range_discounts)} lock-in discounts` : ''}`} />
+            <StatCard index={3} icon={Receipt} label="In selected range" value={peso(s.range_total)} sub={`${s.range_count} payment${s.range_count === 1 ? '' : 's'}${s.range_setup > 0 ? ` · ${peso(s.range_setup)} setup fees` : ''}${s.range_discounts > 0 ? ` · ${peso(s.range_discounts)} lock-in discounts` : ''}`} />
           </div>
 
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
@@ -204,7 +204,9 @@ export default function Sales() {
                       <tr key={p.id} className="border-t border-navy-600/50 hover:bg-navy-700/30">
                         <td className="whitespace-nowrap px-2 py-3 text-mist">
                           {fmtDate(p.paid_at)}
-                          <div className="text-[11px] text-muted-foreground">for due {fmtDate(p.covered_due_date)}</div>
+                          {p.kind === 'setup'
+                            ? <div className="text-[11px] font-medium text-violet-400">One-time setup fee</div>
+                            : <div className="text-[11px] text-muted-foreground">for due {fmtDate(p.covered_due_date)}</div>}
                         </td>
                         <td className="px-2 py-3">
                           <div className="flex items-center gap-2">
@@ -255,7 +257,9 @@ export default function Sales() {
             <AlertDialogHeader>
               <AlertDialogTitle>Void {peso(voiding.amount)} payment?</AlertDialogTitle>
               <AlertDialogDescription>
-                It will be removed from Sales. If it’s the latest payment for that system, its due date goes back to {fmtDate(voiding.covered_due_date)}.
+                {voiding.kind === 'setup'
+                  ? 'It will be removed from Sales and that system’s setup fee will show as unpaid again.'
+                  : `It will be removed from Sales. If it’s the latest payment for that system, its due date goes back to ${fmtDate(voiding.covered_due_date)}.`}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

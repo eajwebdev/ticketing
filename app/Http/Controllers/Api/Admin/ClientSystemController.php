@@ -24,7 +24,8 @@ class ClientSystemController extends Controller
         $query = ClientSystem::with(['client', 'systemType'])
             ->addSelect(['last_paid_at' => SystemPayment::select('paid_at')
                 ->whereColumn('client_system_id', 'client_systems.id')
-                ->latest('paid_at')->limit(1)]);
+                ->latest('paid_at')->limit(1)])
+            ->withExists(['payments as setup_recorded' => fn ($q) => $q->where('kind', 'setup')]);
 
         match ($request->input('state')) {
             'overdue' => $query->overdue(),
@@ -66,12 +67,15 @@ class ClientSystemController extends Controller
         abort_unless($request->user()->hasPermission(\App\Support\Permissions::BILLING), 403);
 
         $active = ClientSystem::active()->get(['amount', 'billing_cycle']);
+        $setupUnpaid = ClientSystem::setupUnpaid();
 
         return [
             'overdue' => ClientSystem::overdue()->count(),
             'overdue_amount' => (float) ClientSystem::overdue()->sum('amount'),
             'due_soon' => ClientSystem::dueSoon()->count(),
             'due_soon_amount' => (float) ClientSystem::dueSoon()->sum('amount'),
+            'setup_unpaid' => (clone $setupUnpaid)->count(),
+            'setup_unpaid_amount' => (float) (clone $setupUnpaid)->sum('setup_fee'),
             'active' => $active->count(),
             'mrr' => round($active->sum(fn ($s) => $s->monthlyValue()), 2),
             'sales_this_month' => (float) SystemPayment::whereBetween('paid_at', [
@@ -105,7 +109,17 @@ class ClientSystemController extends Controller
             unset($data['password']);
         }
 
+        // A setup payment recorded in Sales owns the paid date; void it there to change it.
+        $setupRecorded = $clientSystem->payments()->where('kind', 'setup')->exists();
+        if ($setupRecorded) {
+            unset($data['setup_paid_at']);
+        }
+
         $clientSystem->fill($data);
+        // Setup fee removed → nothing left to have paid (unless a setup payment is on record).
+        if ((float) $clientSystem->setup_fee <= 0 && ! $setupRecorded) {
+            $clientSystem->setup_paid_at = null;
+        }
         if ($clientSystem->isDirty('next_due_date')) {
             $clientSystem->billing_anchor_day = $clientSystem->next_due_date->day;
             $clientSystem->last_reminded_on = null;
@@ -169,6 +183,45 @@ class ClientSystemController extends Controller
         ], 201);
     }
 
+    /** Record the one-time setup fee as a sale. Doesn't touch the subscription due date. */
+    public function paySetup(Request $request, ClientSystem $clientSystem)
+    {
+        $data = $request->validate([
+            'amount' => ['required', 'numeric', 'min:0', 'max:9999999999'],
+            'paid_at' => ['required', 'date', 'before_or_equal:today'],
+            'method' => ['required', Rule::in(SystemPayment::METHODS)],
+            'reference' => ['nullable', 'string', 'max:255'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $payment = DB::transaction(function () use ($data, $clientSystem, $request) {
+            $system = ClientSystem::lockForUpdate()->findOrFail($clientSystem->id);
+            abort_if((float) $system->setup_fee <= 0, 422, 'This system has no setup fee.');
+            abort_if($system->setup_paid_at !== null, 422, 'The setup fee is already paid.');
+
+            $payment = SystemPayment::create([
+                ...$data,
+                'kind' => 'setup',
+                'cycles' => 1,
+                'discount_amount' => 0,
+                'client_system_id' => $system->id,
+                'client_id' => $system->client_id,
+                'system_type_id' => $system->system_type_id,
+                'covered_due_date' => $system->next_due_date,
+                'next_due_date' => $system->next_due_date,
+                'recorded_by' => $request->user()->id,
+            ]);
+            $system->update(['setup_paid_at' => $data['paid_at']]);
+
+            return $payment;
+        });
+
+        return response()->json([
+            'payment' => new SystemPaymentResource($payment),
+            'system' => new ClientSystemResource($clientSystem->fresh(['client', 'systemType'])),
+        ], 201);
+    }
+
     public function payments(ClientSystem $clientSystem)
     {
         return SystemPaymentResource::collection(
@@ -204,6 +257,10 @@ class ClientSystemController extends Controller
             'system_name' => ['nullable', 'string', 'max:255'],
             'label' => ['nullable', 'string', 'max:255'],
             'amount' => ['required', 'numeric', 'min:0', 'max:9999999999'],
+            // One-time setup / installation fee, billed separately from the subscription.
+            'setup_fee' => ['nullable', 'numeric', 'min:0', 'max:9999999999'],
+            // For systems added after the client already paid setup (no sale is recorded).
+            'setup_paid_at' => ['nullable', 'date', 'before_or_equal:today'],
             // Month-to-month price, used to show the lock-in discount on longer cycles.
             'regular_monthly_rate' => ['nullable', 'numeric', 'min:0', 'max:9999999999'],
             'billing_cycle' => ['required', Rule::in(array_keys(ClientSystem::CYCLES))],
@@ -217,6 +274,9 @@ class ClientSystemController extends Controller
         ]);
 
         $data['next_due_date'] = Carbon::parse($data['next_due_date'])->startOfDay();
+        if ((float) ($data['setup_fee'] ?? 0) <= 0) {
+            $data['setup_paid_at'] = null;
+        }
         // Blank start date: new systems start on their first due date; edits keep what's saved.
         if (empty($data['started_on'])) {
             $data['started_on'] = $existing?->started_on ?? $data['next_due_date']->copy();

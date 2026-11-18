@@ -20,7 +20,9 @@ class LeadResource extends JsonResource
             'business_type' => $this->business_type,
             'source' => $this->source,
             'stage' => $this->stage,
+            // estimated_value = one-time setup fee; monthly_fee = recurring subscription.
             'estimated_value' => $this->estimated_value !== null ? (float) $this->estimated_value : null,
+            'monthly_fee' => $this->monthly_fee !== null ? (float) $this->monthly_fee : null,
             'next_follow_up' => $followUp?->toDateString(),
             'follow_up_due' => $this->resource->isOpen() && $followUp && $followUp->lte(today()),
             'notes' => $this->notes,

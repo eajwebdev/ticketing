@@ -27,7 +27,7 @@ class ClientSystem extends Model
     public const DUE_SOON_DAYS = 7;
 
     protected $fillable = [
-        'client_id', 'system_type_id', 'system_name', 'label', 'amount', 'regular_monthly_rate', 'billing_cycle', 'started_on', 'next_due_date',
+        'client_id', 'system_type_id', 'system_name', 'label', 'amount', 'setup_fee', 'setup_paid_at', 'regular_monthly_rate', 'billing_cycle', 'started_on', 'next_due_date',
         'billing_anchor_day', 'status', 'login_url', 'username', 'password', 'notes',
         'last_reminded_on', 'created_by',
     ];
@@ -41,6 +41,8 @@ class ClientSystem extends Model
         return [
             'amount' => 'decimal:2',
             'regular_monthly_rate' => 'decimal:2',
+            'setup_fee' => 'decimal:2',
+            'setup_paid_at' => 'date',
             'next_due_date' => 'date',
             'started_on' => 'date',
             'last_reminded_on' => 'date',
@@ -177,6 +179,21 @@ class ClientSystem extends Model
         $regular = $this->regularCycleAmount();
 
         return $regular ? round($this->discountAmount() / $regular * 100, 1) : 0.0;
+    }
+
+    /** none | unpaid | paid — the one-time setup fee. */
+    public function setupState(): string
+    {
+        if ((float) $this->setup_fee <= 0) {
+            return 'none';
+        }
+
+        return $this->setup_paid_at ? 'paid' : 'unpaid';
+    }
+
+    public function scopeSetupUnpaid($query)
+    {
+        return $query->where('status', '!=', 'cancelled')->where('setup_fee', '>', 0)->whereNull('setup_paid_at');
     }
 
     public function displayName(): string

@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import {
   KeyRound, Search, Plus, Pencil, Trash2, Eye, EyeOff, Copy, ExternalLink, History, BadgeCheck,
-  AlertTriangle, CalendarClock, Wallet, Layers, ServerCog, Lock,
+  AlertTriangle, CalendarClock, Wallet, Layers, ServerCog, Lock, Wrench, CheckCircle2,
 } from 'lucide-react';
 import api from '@/lib/api';
 import { can, P } from '@/lib/permissions';
@@ -42,7 +42,7 @@ export default function ClientSystems() {
   const [params, setParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [state, setState] = useState(params.get('state') || 'all');
-  const [dialog, setDialog] = useState(null); // {type: 'edit'|'pay'|'creds'|'history'|'delete', system}
+  const [dialog, setDialog] = useState(null); // {type: 'edit'|'pay'|'setup'|'creds'|'history'|'delete', system}
 
   // ?client=12 — opened from a client's card: show only that client's systems.
   const clientFilter = Number(params.get('client')) || null;
@@ -116,7 +116,10 @@ export default function ClientSystems() {
       {isAdmin && overview && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <StatCard index={0} icon={AlertTriangle} label="Overdue" value={overview.overdue}
-            sub={overview.overdue ? `${peso(overview.overdue_amount)} unpaid` : 'All caught up'} accent="#E91E4F" />
+            sub={[
+              overview.overdue ? `${peso(overview.overdue_amount)} unpaid` : 'All caught up',
+              overview.setup_unpaid ? `+ ${peso(overview.setup_unpaid_amount)} setup` : null,
+            ].filter(Boolean).join(' · ')} accent="#E91E4F" />
           <StatCard index={1} icon={CalendarClock} label="Due in 7 days" value={overview.due_soon}
             sub={overview.due_soon ? peso(overview.due_soon_amount) : undefined} accent="#F59E0B" />
           <StatCard index={2} icon={Wallet} label="Sales this month" value={peso(overview.sales_this_month)} accent="#22C55E" />
@@ -164,6 +167,7 @@ export default function ClientSystems() {
 
       {dialog?.type === 'edit' && <SystemDialog system={dialog.system} onClose={() => setDialog(null)} onSaved={refresh} />}
       {dialog?.type === 'pay' && <PayDialog system={dialog.system} onClose={() => setDialog(null)} onSaved={refresh} />}
+      {dialog?.type === 'setup' && <SetupPayDialog system={dialog.system} onClose={() => setDialog(null)} onSaved={refresh} />}
       {dialog?.type === 'creds' && <CredentialsDialog system={dialog.system} onClose={() => setDialog(null)} />}
       {dialog?.type === 'history' && <HistoryDialog system={dialog.system} onClose={() => setDialog(null)} onChanged={refresh} />}
       {dialog?.type === 'delete' && (
@@ -222,6 +226,18 @@ function SystemRow({ s, isAdmin, canSeeCreds, focused, onAction }) {
             ) : (
               <div className="text-[11px] text-muted-foreground">{CYCLE_LABELS[s.billing_cycle]}</div>
             )}
+            {s.setup_state === 'unpaid' && (
+              <button type="button" onClick={() => onAction('setup', s)}
+                className="mt-1 inline-flex items-center gap-1 rounded-md bg-amber-500/12 px-1.5 py-0.5 text-[11px] font-medium text-amber-400 transition-colors hover:bg-amber-500/20"
+                title="Record the one-time setup payment">
+                <Wrench className="h-3 w-3" /> {peso(s.setup_fee)} setup unpaid
+              </button>
+            )}
+            {s.setup_state === 'paid' && (
+              <div className="mt-1 inline-flex items-center gap-1 text-[11px] text-emerald-400" title={`Paid ${fmtDate(s.setup_paid_at)}`}>
+                <CheckCircle2 className="h-3 w-3" /> {peso(s.setup_fee)} setup paid
+              </div>
+            )}
           </div>
         )}
         <div className="min-w-32">
@@ -271,6 +287,8 @@ function SystemDialog({ system, onClose, onSaved }) {
     system_name: system.system_name ?? '',
     label: system.label ?? '',
     amount: system.amount ?? '',
+    setup_fee: system.setup_fee ?? '',
+    setup_paid_at: system.setup_paid_at ?? '',
     regular_monthly_rate: system.regular_monthly_rate ?? '',
     billing_cycle: system.billing_cycle ?? 'monthly',
     next_due_date: system.next_due_date ?? '',
@@ -351,7 +369,7 @@ function SystemDialog({ system, onClose, onSaved }) {
 
           <Section title="Billing">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <F label={`Price per cycle (₱)`} e={err('amount')}>
+              <F label="Subscription price per cycle (₱)" e={err('amount')}>
                 <Input type="number" min="0" step="0.01" inputMode="decimal" value={form.amount} onChange={set('amount')} required />
               </F>
               <F label="Billing cycle" e={err('billing_cycle')}>
@@ -372,6 +390,7 @@ function SystemDialog({ system, onClose, onSaved }) {
             {form.billing_cycle !== 'monthly' && (
               <LockInPanel form={form} setForm={setForm} err={err('regular_monthly_rate')} />
             )}
+            <SetupFeeFields form={form} setForm={setForm} err={err} recorded={isEdit && system.setup_recorded} paidAt={system.setup_paid_at} />
             <p className="text-[11px] text-muted-foreground">
               Set the first due date — every “Mark paid” records a sale and moves it forward one {CYCLE_LABELS[form.billing_cycle].toLowerCase()} cycle.
             </p>
@@ -407,6 +426,56 @@ function SystemDialog({ system, onClose, onSaved }) {
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Optional one-time setup fee. For systems that were set up (and paid) before being
+ * added here, tick "already paid" — that marks it paid without adding a sale.
+ */
+function SetupFeeFields({ form, setForm, err, recorded, paidAt }) {
+  const hasFee = parseFloat(form.setup_fee) > 0;
+  const paid = !!form.setup_paid_at;
+  return (
+    <div className="space-y-3 border-t border-navy-600/60 pt-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <F label="One-time setup fee (₱, optional)" e={err('setup_fee')}>
+          <Input type="number" min="0" step="0.01" inputMode="decimal" value={form.setup_fee}
+            onChange={(e) => setForm({ ...form, setup_fee: e.target.value, ...(parseFloat(e.target.value) > 0 ? {} : { setup_paid_at: '' }) })}
+            placeholder="Leave blank if none" />
+        </F>
+        {hasFee && (recorded ? (
+          <div className="flex items-end pb-2.5">
+            <span className="inline-flex items-center gap-1.5 text-xs text-emerald-400">
+              <CheckCircle2 className="h-4 w-4" /> Paid {fmtDate(paidAt)} · recorded in Sales
+            </span>
+          </div>
+        ) : (
+          <F label="Setup payment" e={err('setup_paid_at')}>
+            <div className="flex h-10 items-center gap-2">
+              <label className="flex cursor-pointer select-none items-center gap-2 text-sm text-mist">
+                <input type="checkbox" className="h-4 w-4 accent-[#E91E4F]" checked={paid}
+                  onChange={(e) => setForm({ ...form, setup_paid_at: e.target.checked ? (paidAt || (form.started_on && form.started_on <= todayISO() ? form.started_on : todayISO())) : '' })} />
+                Already paid
+              </label>
+              {paid && (
+                <Input type="date" className="h-9 flex-1" max={todayISO()} value={form.setup_paid_at}
+                  onChange={(e) => setForm({ ...form, setup_paid_at: e.target.value })} aria-label="Setup paid on" />
+              )}
+            </div>
+          </F>
+        ))}
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        {!hasFee
+          ? 'Only for systems with an installation / setup charge on top of the subscription.'
+          : recorded
+            ? 'To change it, void the setup payment in Payment history.'
+            : paid
+              ? 'Marked as paid before it was tracked here — no sale is added. To record it in Sales instead, untick and use “Setup unpaid” on the system.'
+              : 'Not paid yet — use “Setup unpaid” on the system to record the payment in Sales.'}
+      </p>
+    </div>
   );
 }
 
@@ -582,6 +651,70 @@ function PayDialog({ system, onClose, onSaved }) {
   );
 }
 
+/** Record the one-time setup fee. Doesn't move the subscription due date. */
+function SetupPayDialog({ system, onClose, onSaved }) {
+  const [errors, setErrors] = useState({});
+  const [form, setForm] = useState({ amount: system.setup_fee, paid_at: todayISO(), method: 'cash', reference: '', notes: '' });
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const err = (k) => errors[k]?.[0];
+
+  const mutation = useMutation({
+    mutationFn: async () => (await api.post(`/admin/client-systems/${system.id}/pay-setup`, form)).data,
+    onSuccess: (data) => {
+      onSaved();
+      toast.success(`${peso(data.payment.amount)} setup fee recorded as a sale`);
+      onClose();
+    },
+    onError: (e) => {
+      setErrors(e.response?.data?.errors || {});
+      if (!e.response?.data?.errors) toast.error(e.response?.data?.message || 'Could not record payment.');
+    },
+  });
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Record setup payment</DialogTitle>
+          <DialogDescription>{system.client?.store_name || system.client?.name} · {system.display_name}</DialogDescription>
+        </DialogHeader>
+        <div className="rounded-xl border border-navy-600 bg-navy-800/50 p-3 text-sm">
+          <div className="flex justify-between"><span className="text-muted-foreground">One-time setup fee</span><span className="font-semibold text-mist">{peso(system.setup_fee)}</span></div>
+          <div className="mt-1 flex justify-between">
+            <span className="text-muted-foreground">Subscription</span>
+            <span className="text-mist">{peso(system.amount)}{CYCLE_SUFFIX[system.billing_cycle]} · next due {fmtDate(system.next_due_date)}</span>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">Recorded in Sales as a setup fee. The subscription due date doesn’t change.</p>
+        </div>
+        <form onSubmit={(e) => { e.preventDefault(); setErrors({}); mutation.mutate(); }} className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <F label="Amount received (₱)" e={err('amount')}>
+              <Input type="number" min="0" step="0.01" inputMode="decimal" value={form.amount} onChange={set('amount')} required />
+            </F>
+            <F label="Date paid" e={err('paid_at')}><Input type="date" max={todayISO()} value={form.paid_at} onChange={set('paid_at')} required /></F>
+            <F label="Method" e={err('method')}>
+              <Select value={form.method} onValueChange={(v) => setForm({ ...form, method: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(METHOD_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </F>
+            <F label="Reference no. (optional)" e={err('reference')}><Input value={form.reference} onChange={set('reference')} placeholder="OR / GCash ref" /></F>
+          </div>
+          <F label="Notes (optional)" e={err('notes')}><Textarea rows={2} value={form.notes} onChange={set('notes')} /></F>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+            <Button type="submit" disabled={mutation.isPending}>
+              {mutation.isPending ? <Spinner className="h-4 w-4" /> : <><Wrench /> Record setup payment</>}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function CredentialsDialog({ system, onClose }) {
   const [show, setShow] = useState(false);
   const { data, isLoading, isError, error } = useQuery({
@@ -674,11 +807,12 @@ function HistoryDialog({ system, onClose, onChanged }) {
                   <div className="min-w-0 flex-1">
                     <div className="font-semibold text-white">
                       {peso(p.amount)} <span className="text-xs font-normal text-muted-foreground">· {METHOD_LABELS[p.method]}{p.reference && ` · ${p.reference}`}</span>
+                      {p.kind === 'setup' && <span className="ml-1 rounded bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-medium text-violet-300">Setup fee</span>}
                       {p.cycles > 1 && <span className="ml-1 rounded bg-blue-500/15 px-1.5 py-0.5 text-[10px] font-medium text-blue-300">{p.cycles} cycles in advance</span>}
                       {p.discount_amount > 0 && <span className="ml-1 text-xs font-normal text-amber-400">· {peso(p.discount_amount)} lock-in discount</span>}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      Paid {fmtDate(p.paid_at)} · settled due {fmtDate(p.covered_due_date)}{p.recorded_by && ` · by ${p.recorded_by.name}`}
+                      Paid {fmtDate(p.paid_at)}{p.kind === 'setup' ? ' · one-time setup' : ` · settled due ${fmtDate(p.covered_due_date)}`}{p.recorded_by && ` · by ${p.recorded_by.name}`}
                     </div>
                   </div>
                   <IconButton label="Void payment" icon={Trash2} size="icon-sm" onClick={() => setVoiding(p)} />
@@ -697,7 +831,9 @@ function HistoryDialog({ system, onClose, onChanged }) {
             <AlertDialogHeader>
               <AlertDialogTitle>Void {peso(voiding.amount)} payment?</AlertDialogTitle>
               <AlertDialogDescription>
-                It will be removed from Sales. If it’s the latest payment, the due date goes back to {fmtDate(voiding.covered_due_date)}.
+                {voiding.kind === 'setup'
+                  ? 'It will be removed from Sales and the setup fee will show as unpaid again.'
+                  : `It will be removed from Sales. If it’s the latest payment, the due date goes back to ${fmtDate(voiding.covered_due_date)}.`}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

@@ -56,6 +56,8 @@ class SalesController extends Controller
                 'range_total' => (float) $filtered()->sum('amount'),
                 'range_count' => $filtered()->count(),
                 'range_discounts' => (float) $filtered()->sum('discount_amount'),
+                'range_setup' => (float) $filtered()->where('system_payments.kind', 'setup')->sum('amount'),
+                'range_setup_count' => $filtered()->where('system_payments.kind', 'setup')->count(),
                 'this_month' => $sum(today()->startOfMonth()->toDateString(), today()->endOfMonth()->toDateString()),
                 'last_month' => $sum(today()->subMonthNoOverflow()->startOfMonth()->toDateString(), today()->subMonthNoOverflow()->endOfMonth()->toDateString()),
                 'this_year' => $sum(today()->startOfYear()->toDateString(), today()->endOfYear()->toDateString()),
@@ -75,7 +77,17 @@ class SalesController extends Controller
     {
         DB::transaction(function () use ($payment) {
             $system = $payment->clientSystem()->lockForUpdate()->first();
+
+            if ($payment->kind === 'setup') {
+                // Voiding the setup payment makes the setup fee unpaid again.
+                $system?->update(['setup_paid_at' => null]);
+                $payment->delete();
+
+                return;
+            }
+
             $isLatest = ! SystemPayment::where('client_system_id', $payment->client_system_id)
+                ->where('kind', 'subscription')
                 ->where('id', '>', $payment->id)->exists();
 
             if ($system && $isLatest && $system->next_due_date->isSameDay($payment->next_due_date)) {
@@ -100,10 +112,11 @@ class SalesController extends Controller
 
         return response()->streamDownload(function () use ($rows) {
             $out = fopen('php://output', 'w');
-            fputcsv($out, ['Paid on', 'Client', 'System', 'Label', 'Amount (PHP)', 'Lock-in discount (PHP)', 'Method', 'Reference', 'Covered due date', 'Recorded by']);
+            fputcsv($out, ['Paid on', 'Type', 'Client', 'System', 'Label', 'Amount (PHP)', 'Lock-in discount (PHP)', 'Method', 'Reference', 'Covered due date', 'Recorded by']);
             foreach ($rows as $p) {
                 fputcsv($out, [
                     $p->paid_at->toDateString(),
+                    $p->kind === 'setup' ? 'Setup fee' : 'Subscription',
                     $p->client?->store_name ?: $p->client?->name,
                     $p->systemType?->name,
                     $p->clientSystem?->label,

@@ -15,7 +15,7 @@ class Lead extends Model
 
     protected $fillable = [
         'business_name', 'contact_person', 'email', 'phone', 'business_type', 'source', 'system_type_id',
-        'estimated_value', 'stage', 'owner_id', 'next_follow_up', 'last_reminded_on', 'notes', 'lost_reason',
+        'estimated_value', 'monthly_fee', 'stage', 'owner_id', 'next_follow_up', 'last_reminded_on', 'notes', 'lost_reason',
         'converted_client_id', 'converted_at', 'created_by',
     ];
 
@@ -25,6 +25,7 @@ class Lead extends Model
     {
         return [
             'estimated_value' => 'decimal:2',
+            'monthly_fee' => 'decimal:2',
             'next_follow_up' => 'date',
             'last_reminded_on' => 'date',
             'converted_at' => 'datetime',

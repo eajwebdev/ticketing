@@ -14,14 +14,17 @@ export default function FinanceTab({ data }) {
       <KpiGrid>
         <Kpi index={0} icon={Wallet} label={`Collected · ${f.month.label}`} value={peso(f.month.revenue)} accent="#22C55E"
           delta={<Delta value={pctChange(f.month.revenue, f.month.revenue_prev)} />}
-          sub={`${f.month.payments_count} payment${f.month.payments_count === 1 ? '' : 's'}`} to="/app/admin/sales" />
+          sub={`${f.month.payments_count} payment${f.month.payments_count === 1 ? '' : 's'}${f.setup_revenue > 0 ? ` · ${peso(f.setup_revenue)} setup fees` : ''}`} to="/app/admin/sales" />
         <Kpi index={1} icon={PiggyBank} label="Net profit" value={peso(f.month.net)}
           accent={f.month.net >= 0 ? '#22C55E' : '#E91E4F'} tone={f.month.net < 0 ? 'danger' : 'default'}
           delta={<Delta value={pctChange(f.month.net, f.month.net_prev)} />}
           sub={margin != null ? `${margin}% margin` : 'No collections yet'} />
         <Kpi index={2} icon={AlertTriangle} label="Overdue" value={peso(f.receivables.overdue_amount)} accent="#E91E4F"
           tone={f.receivables.overdue_count ? 'danger' : 'success'}
-          sub={f.receivables.overdue_count ? `${f.receivables.overdue_count} system${f.receivables.overdue_count === 1 ? '' : 's'} to collect` : 'Nothing overdue'}
+          sub={[
+            f.receivables.overdue_count ? `${f.receivables.overdue_count} system${f.receivables.overdue_count === 1 ? '' : 's'} to collect` : 'Nothing overdue',
+            f.receivables.setup_unpaid_count ? `+ ${peso(f.receivables.setup_unpaid_amount)} setup unpaid` : null,
+          ].filter(Boolean).join(' · ')}
           to="/app/admin/client-systems" />
         <Kpi index={3} icon={Repeat} label="Monthly recurring (MRR)" value={peso(f.mrr)} accent="#3B82F6"
           sub={`${f.active_systems} active system${f.active_systems === 1 ? '' : 's'} · ${peso(f.receivables.due_soon_amount)} due in 7 days`}
@@ -53,7 +56,8 @@ export default function FinanceTab({ data }) {
           {f.recent_payments.length ? (
             <div className="space-y-2">
               {f.recent_payments.map((p) => (
-                <Row key={p.id} dot="#22C55E" title={p.client} subtitle={p.system}
+                <Row key={p.id} dot={p.kind === 'setup' ? '#8B5CF6' : '#22C55E'} title={p.client}
+                  subtitle={p.kind === 'setup' ? `${p.system} · Setup fee` : p.system}
                   right={peso(p.amount)} rightSub={`${shortDate(localDate(p.paid_at))} · ${METHOD_LABELS[p.method] ?? p.method}`} />
               ))}
             </div>
