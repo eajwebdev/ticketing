@@ -104,7 +104,8 @@ function CreateTicketDialog({ onClose }) {
     },
   });
 
-  const set = (k) => (v) => setForm({ ...form, [k]: v });
+  // Functional update so two quick changes can't overwrite each other.
+  const set = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
   const err = (k) => errors[k]?.[0];
   const dirty = form.subject.trim() || form.description.trim();
 
@@ -132,7 +133,7 @@ function CreateTicketDialog({ onClose }) {
           {isAdmin && (
             <div className="space-y-2 rounded-xl border border-crimson/25 bg-crimson/5 p-4">
               <Label className="flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5 text-crimson-soft" /> File on behalf of a client</Label>
-              <Select value={form.customer_id} onValueChange={(v) => setForm({ ...form, customer_id: v, client_system_id: '' })}>
+              <Select value={form.customer_id} onValueChange={(v) => setForm((f) => ({ ...f, customer_id: v, client_system_id: '' }))}>
                 <SelectTrigger><SelectValue placeholder="Select a client (leave empty to file as yourself)" /></SelectTrigger>
                 <SelectContent>
                   {clients.map((c) => (

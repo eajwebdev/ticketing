@@ -42,14 +42,20 @@ class ClientBusinessNamesTest extends TestCase
             ->assertOk()->assertJsonPath('data.0.id', $client->id);
     }
 
-    public function test_requires_a_name_and_rejects_duplicates(): void
+    public function test_store_name_is_optional_and_editing_keeps_existing_names(): void
     {
-        $base = ['name' => 'X', 'email' => 'x@shop.test'];
+        // The admin client form no longer sends a store name.
+        $this->postJson('/api/v1/admin/clients', ['name' => 'X', 'email' => 'x@shop.test'])
+            ->assertCreated()->assertJsonPath('user.store_name', null);
 
-        $this->postJson('/api/v1/admin/clients', [...$base, 'business_names' => []])
-            ->assertJsonValidationErrors('business_names');
+        $client = User::factory()->create([
+            'role' => Role::Customer, 'approval_status' => 'approved', 'store_name' => 'Juan Laundry',
+        ]);
+        $this->patchJson("/api/v1/admin/clients/{$client->id}", [
+            'name' => 'Juan', 'email' => $client->email, 'phone' => '0917',
+        ])->assertOk()->assertJsonPath('data.store_name', 'Juan Laundry');
 
-        $this->postJson('/api/v1/admin/clients', [...$base, 'business_names' => ['Shop', 'shop']])
+        $this->postJson('/api/v1/admin/clients', ['name' => 'Y', 'email' => 'y@shop.test', 'business_names' => ['Shop', 'shop']])
             ->assertJsonValidationErrors('business_names.1');
     }
 

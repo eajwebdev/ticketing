@@ -266,7 +266,10 @@ function ReopenButton({ onConfirm }) {
 
 function DetailsCard({ ticket }) {
   const rows = [
-    { icon: Layers, label: 'System', value: ticket.system_type?.name && (ticket.client_system?.label ? `${ticket.system_type.name} (${ticket.client_system.label})` : ticket.system_type.name) },
+    { icon: Layers, label: 'System', value: ticket.system_type?.name && (() => {
+      const name = ticket.client_system?.system_name || ticket.system_type.name;
+      return ticket.client_system?.label ? `${name} (${ticket.client_system.label})` : name;
+    })() },
     { icon: Tag, label: 'Category', value: ticket.category?.name },
     { icon: Zap, label: 'Urgency', value: ticket.urgency ? <UrgencyDot urgency={ticket.urgency} /> : null },
   ].filter((r) => r.value);

@@ -326,4 +326,26 @@ class BillingTest extends TestCase
             'subject' => 'Inquiry', 'description' => 'How much?', 'system_type_id' => $this->type->id,
         ])->assertCreated()->assertJsonPath('data.system_type.id', $this->type->id);
     }
+
+    public function test_client_system_can_have_its_own_exact_name(): void
+    {
+        Sanctum::actingAs($this->admin);
+        $base = [
+            'client_id' => $this->client->id, 'system_type_id' => $this->type->id,
+            'amount' => 1500, 'billing_cycle' => 'monthly', 'next_due_date' => '2026-02-15',
+        ];
+
+        $id = $this->postJson('/api/v1/admin/client-systems', [...$base, 'system_name' => "Juan's LaundryPro", 'label' => 'Main branch'])
+            ->assertCreated()
+            ->assertJsonPath('data.system_name', "Juan's LaundryPro")
+            ->assertJsonPath('data.display_name', "Juan's LaundryPro (Main branch)")
+            ->json('data.id');
+
+        $this->getJson('/api/v1/admin/client-systems?search=laundrypro')
+            ->assertOk()->assertJsonPath('data.0.id', $id);
+
+        // Blank name falls back to the system type.
+        $this->patchJson("/api/v1/admin/client-systems/{$id}", [...$base, 'system_name' => '', 'label' => null])
+            ->assertOk()->assertJsonPath('data.display_name', 'Laundry Management System');
+    }
 }

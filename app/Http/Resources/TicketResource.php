@@ -19,6 +19,7 @@ class TicketResource extends JsonResource
             'system_type' => new LookupResource($this->whenLoaded('systemType')),
             'client_system' => $this->whenLoaded('clientSystem', fn () => $this->clientSystem ? [
                 'id' => $this->clientSystem->id,
+                'system_name' => $this->clientSystem->system_name,
                 'label' => $this->clientSystem->label,
             ] : null),
             'category' => new LookupResource($this->whenLoaded('category')),

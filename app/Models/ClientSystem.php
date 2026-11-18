@@ -27,7 +27,7 @@ class ClientSystem extends Model
     public const DUE_SOON_DAYS = 7;
 
     protected $fillable = [
-        'client_id', 'system_type_id', 'label', 'amount', 'regular_monthly_rate', 'billing_cycle', 'started_on', 'next_due_date',
+        'client_id', 'system_type_id', 'system_name', 'label', 'amount', 'regular_monthly_rate', 'billing_cycle', 'started_on', 'next_due_date',
         'billing_anchor_day', 'status', 'login_url', 'username', 'password', 'notes',
         'last_reminded_on', 'created_by',
     ];
@@ -181,7 +181,8 @@ class ClientSystem extends Model
 
     public function displayName(): string
     {
-        $name = $this->systemType?->name ?? 'System';
+        // The client's own name for it wins; otherwise the system type's name.
+        $name = trim((string) $this->system_name) ?: ($this->systemType?->name ?? 'System');
 
         return $this->label ? "{$name} ({$this->label})" : $name;
     }

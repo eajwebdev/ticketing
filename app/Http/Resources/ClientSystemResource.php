@@ -14,6 +14,7 @@ class ClientSystemResource extends JsonResource
 
         return [
             'id' => $this->id,
+            'system_name' => $this->system_name,
             'label' => $this->label,
             'display_name' => $this->displayName(),
             'client' => $this->whenLoaded('client', fn () => [

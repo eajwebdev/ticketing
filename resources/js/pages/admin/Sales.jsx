@@ -215,7 +215,7 @@ export default function Sales() {
                         <td className="px-2 py-3">
                           <div className="flex items-center gap-2 text-mist">
                             <Icon className="h-4 w-4 shrink-0 text-crimson-soft" />
-                            <span className="truncate">{p.system_type?.name}{p.label && <span className="text-muted-foreground"> · {p.label}</span>}</span>
+                            <span className="truncate">{p.system_name || p.system_type?.name}{p.label && <span className="text-muted-foreground"> · {p.label}</span>}</span>
                           </div>
                         </td>
                         <td className="px-2 py-3 text-muted-foreground">

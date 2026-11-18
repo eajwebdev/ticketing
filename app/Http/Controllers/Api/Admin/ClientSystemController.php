@@ -43,6 +43,7 @@ class ClientSystemController extends Controller
         if ($request->filled('search')) {
             $s = $request->search;
             $query->where(fn ($q) => $q->where('label', 'like', "%$s%")
+                ->orWhere('system_name', 'like', "%$s%")
                 ->orWhereHas('client', fn ($c) => $c->where('name', 'like', "%$s%")
                     ->orWhere('store_name', 'like', "%$s%")
                     ->orWhereRaw('LOWER(CAST(business_names AS CHAR)) LIKE ?', ['%'.mb_strtolower($s).'%'])
@@ -200,6 +201,7 @@ class ClientSystemController extends Controller
         $data = $request->validate([
             'client_id' => ['required', Rule::exists('users', 'id')->where('role', Role::Customer->value)],
             'system_type_id' => ['required', 'exists:system_types,id'],
+            'system_name' => ['nullable', 'string', 'max:255'],
             'label' => ['nullable', 'string', 'max:255'],
             'amount' => ['required', 'numeric', 'min:0', 'max:9999999999'],
             // Month-to-month price, used to show the lock-in discount on longer cycles.

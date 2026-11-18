@@ -32,6 +32,7 @@ class SystemPaymentResource extends JsonResource
                 'name' => $this->systemType->name,
                 'icon' => $this->systemType->icon,
             ]),
+            'system_name' => $this->whenLoaded('clientSystem', fn () => $this->clientSystem?->system_name),
             'label' => $this->whenLoaded('clientSystem', fn () => $this->clientSystem?->label),
             'recorded_by' => $this->whenLoaded('recorder', fn () => $this->recorder ? [
                 'id' => $this->recorder->id,

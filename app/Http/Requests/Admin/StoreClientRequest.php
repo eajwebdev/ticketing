@@ -18,11 +18,10 @@ class StoreClientRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'.($id ? ",$id" : '')],
-            // A client can own several businesses; the first is the primary name.
-            // `store_name` alone is still accepted (older clients of this API).
-            'business_names' => ['required_without:store_name', 'array', 'min:1', 'max:20'],
+            // Optional — the admin client form no longer asks for a store name.
+            'business_names' => ['sometimes', 'nullable', 'array', 'max:20'],
             'business_names.*' => ['required', 'string', 'max:255', 'distinct:ignore_case'],
-            'store_name' => ['required_without:business_names', 'nullable', 'string', 'max:255'],
+            'store_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'business_types' => ['nullable', 'array', 'max:20'],
             'business_types.*' => ['nullable', 'string', 'max:100'],
             'address' => ['nullable', 'string', 'max:500'],

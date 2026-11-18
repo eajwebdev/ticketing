@@ -2,6 +2,7 @@ import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { selectJustClosed } from '@/components/ui/select';
 
 const Dialog = DialogPrimitive.Root;
 const DialogTrigger = DialogPrimitive.Trigger;
@@ -20,7 +21,17 @@ const DialogOverlay = React.forwardRef(({ className, ...props }, ref) => (
 ));
 DialogOverlay.displayName = 'DialogOverlay';
 
-const DialogContent = React.forwardRef(({ className, children, ...props }, ref) => (
+// Clicks that aren't really "outside": the tap that just picked a dropdown option
+// (it lands on the backdrop once the list closes), clicks inside a portaled
+// dropdown/popover, and clicks on toasts.
+function isFalseOutsideClick(e) {
+  if (selectJustClosed()) return true;
+  const t = e.target;
+  return t instanceof Element
+    && !!t.closest('[data-radix-popper-content-wrapper], [data-radix-select-viewport], [role="listbox"], [data-sonner-toaster]');
+}
+
+const DialogContent = React.forwardRef(({ className, children, onInteractOutside, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
@@ -31,6 +42,10 @@ const DialogContent = React.forwardRef(({ className, children, ...props }, ref) 
         'data-[state=open]:animate-in data-[state=open]:fade-in data-[state=open]:zoom-in-95',
         className
       )}
+      onInteractOutside={(e) => {
+        if (isFalseOutsideClick(e)) e.preventDefault();
+        onInteractOutside?.(e);
+      }}
       {...props}
     >
       {children}

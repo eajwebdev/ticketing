@@ -200,6 +200,9 @@ function SystemRow({ s, isAdmin, canSeeCreds, focused, onAction }) {
         <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-navy-700 text-crimson-soft"><Icon className="h-5 w-5" /></div>
         <div className="min-w-0">
           <div className="truncate font-semibold text-mist">{s.display_name}</div>
+          {s.system_name && s.system_type?.name && (
+            <div className="truncate text-[11px] text-muted-foreground/80">{s.system_type.name}</div>
+          )}
           <div className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground">
             <UserAvatar user={s.client} className="h-4 w-4" />
             <span className="truncate">{s.client?.store_name || s.client?.name}</span>
@@ -265,6 +268,7 @@ function SystemDialog({ system, onClose, onSaved }) {
   const [form, setForm] = useState({
     client_id: system.client?.id ? String(system.client.id) : '',
     system_type_id: system.system_type?.id ? String(system.system_type.id) : '',
+    system_name: system.system_name ?? '',
     label: system.label ?? '',
     amount: system.amount ?? '',
     regular_monthly_rate: system.regular_monthly_rate ?? '',
@@ -315,13 +319,22 @@ function SystemDialog({ system, onClose, onSaved }) {
                 </SelectContent>
               </Select>
             </F>
-            <F label="System" e={err('system_type_id')}>
+            <F label="System type" e={err('system_type_id')}>
               <Select value={form.system_type_id} onValueChange={(v) => setForm({ ...form, system_type_id: v })}>
                 <SelectTrigger><SelectValue placeholder="Choose a system" /></SelectTrigger>
                 <SelectContent>
                   {lookups?.system_types?.map((t) => <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>)}
                 </SelectContent>
               </Select>
+            </F>
+            <F label="System name (optional)" e={err('system_name')} className="sm:col-span-2">
+              <Input value={form.system_name} onChange={set('system_name')} maxLength={255}
+                placeholder={`Exact name the client knows it by, e.g. "Juan's LaundryPro"`} />
+              <p className="text-[11px] text-muted-foreground">
+                Shown on tickets, billing and reminders. Leave blank to use the system type
+                {lookups?.system_types?.find((t) => String(t.id) === form.system_type_id)?.name
+                  ? ` (“${lookups.system_types.find((t) => String(t.id) === form.system_type_id).name}”)` : ''}.
+              </p>
             </F>
             <F label="Label (optional)" e={err('label')}><Input value={form.label} onChange={set('label')} placeholder="e.g. Main branch" /></F>
             <F label="Status" e={err('status')}>

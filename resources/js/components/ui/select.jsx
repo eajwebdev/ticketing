@@ -3,7 +3,30 @@ import * as SelectPrimitive from '@radix-ui/react-select';
 import { Check, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const Select = SelectPrimitive.Root;
+// When a dropdown closes, the same tap/click can land on a dialog's backdrop
+// and close the dialog. Dialogs check this to ignore that "outside" click.
+let lastSelectClose = 0;
+export const selectJustClosed = () => Date.now() - lastSelectClose < 500;
+
+/**
+ * Radix Select with two guards:
+ *  - ignores onValueChange('') — no option here has an empty value; it comes from
+ *    browser autofill / form events on Radix's hidden native <select> and used to
+ *    wipe the chosen value ("select suddenly empty").
+ *  - records when it closes (see selectJustClosed).
+ */
+function Select({ onValueChange, onOpenChange, ...props }) {
+  return (
+    <SelectPrimitive.Root
+      {...props}
+      onValueChange={onValueChange && ((v) => { if (v !== '') onValueChange(v); })}
+      onOpenChange={(open) => {
+        if (!open) lastSelectClose = Date.now();
+        onOpenChange?.(open);
+      }}
+    />
+  );
+}
 const SelectGroup = SelectPrimitive.Group;
 const SelectValue = SelectPrimitive.Value;
 
