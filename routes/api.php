@@ -81,6 +81,9 @@ Route::prefix('v1')->group(function () {
         Route::post('notifications/read-all', [NotificationController::class, 'readAll']);
         Route::post('notifications/{id}/read', [NotificationController::class, 'read']);
 
+        // Live team dashboard — one permission-aware snapshot, polled by the page.
+        Route::get('dashboard', [\App\Http\Controllers\Api\DashboardController::class, 'index']);
+
         // Tasks — every team member (controller checks ownership / tasks.manage)
         Route::get('tasks', [TaskController::class, 'index']);
         Route::post('tasks', [TaskController::class, 'store']);
@@ -115,6 +118,12 @@ Route::prefix('v1')->group(function () {
                 Route::get('sales', [SalesController::class, 'index']);
                 Route::get('sales/export', [SalesController::class, 'export']);
                 Route::delete('sales/{payment}', [SalesController::class, 'destroy']);
+
+                // Expenses — paired with sales to show profit.
+                Route::get('expenses', [\App\Http\Controllers\Api\Admin\ExpenseController::class, 'index']);
+                Route::post('expenses', [\App\Http\Controllers\Api\Admin\ExpenseController::class, 'store']);
+                Route::patch('expenses/{expense}', [\App\Http\Controllers\Api\Admin\ExpenseController::class, 'update']);
+                Route::delete('expenses/{expense}', [\App\Http\Controllers\Api\Admin\ExpenseController::class, 'destroy']);
             });
 
             // Client list is also needed by billing/leads/ticket staff to pick a client.

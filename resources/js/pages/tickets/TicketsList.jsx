@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { PlusCircle, Search, Inbox, Filter } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTickets, useLookups } from '@/hooks/queries';
@@ -26,7 +26,10 @@ export default function TicketsList() {
   const { openCreateTicket } = useCreateTicket();
   const isTeam = user?.role !== 'customer';
   const { data: lookups } = useLookups();
-  const [filters, setFilters] = useState({ status: 'all', system_type: 'all', urgency: 'all', mine: false });
+  // ?status=open etc. (dashboard deep links) preselects the status filter.
+  const [urlParams] = useSearchParams();
+  const initialStatus = STATUSES.some((st) => st.value === urlParams.get("status")) ? urlParams.get("status") : "all";
+  const [filters, setFilters] = useState({ status: initialStatus, system_type: 'all', urgency: 'all', mine: false });
   const [search, setSearch] = useState('');
 
   const params = {
