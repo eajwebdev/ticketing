@@ -24,3 +24,6 @@ Homestead.yaml
 Thumbs.db
 /dist
 /public/spa
+
+# Production env template is kept local only
+.env.production.example

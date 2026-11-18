@@ -16,12 +16,31 @@ cp .env.production.example .env      # fill in ALL values (DB, mail, Reverb keys
 composer install --no-dev --optimize-autoloader
 php artisan key:generate
 php artisan migrate --force
-php artisan db:seed --force         # optional: only if you want the demo lookups; edit seeder first!
+php artisan db:seed --force         # systems, categories, urgency levels + admin from SEED_ADMIN_* (safe to re-run)
 php artisan storage:link
 
 npm ci && npm run build              # emits hashed assets to public/build
 
 php artisan optimize                 # caches config, routes, views
+```
+
+### Admin account (seeder)
+Set these in `.env` **before** `php artisan db:seed --force`:
+
+```
+SEED_ADMIN_NAME="EAJ Admin"
+SEED_ADMIN_EMAIL=you@yourdomain.com
+SEED_ADMIN_PASSWORD=a-strong-password   # empty => a random one is generated and printed ONCE
+SEED_ADMIN_RESET_PASSWORD=false         # true => re-seeding resets an existing admin's password
+```
+
+- The seeder reads these through `config()`, so it works after `config:cache`. If you edit `.env`
+  after caching, run `php artisan config:clear` (or `php artisan optimize` again) before seeding.
+- Re-running is safe: lookups use `firstOrCreate`, and an existing admin is only re-activated
+  (role/approval), never duplicated. Its password changes only with `SEED_ADMIN_RESET_PASSWORD=true`.
+- Production always needs `--force` (Laravel asks for confirmation otherwise and aborts non-interactively).
+
+```bash
 chown -R www-data:www-data storage bootstrap/cache
 ```
 
