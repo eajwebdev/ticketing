@@ -105,7 +105,13 @@ export default function AdminClients() {
                   <div className="flex min-w-0 items-center gap-3">
                     <UserAvatar user={c} className="h-11 w-11" />
                     <div className="min-w-0">
-                      <div className="truncate font-semibold text-mist">{c.store_name || c.name}</div>
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <span className="truncate font-semibold text-mist">{c.store_name || c.name}</span>
+                        {c.business_names?.length > 1 && (
+                          <span className="shrink-0 rounded-full bg-crimson/15 px-1.5 py-0.5 text-[10px] font-medium text-crimson-soft"
+                            title={c.business_names.slice(1).join(', ')}>+{c.business_names.length - 1} more</span>
+                        )}
+                      </div>
                       <div className="truncate text-xs text-muted-foreground">{c.name}</div>
                     </div>
                   </div>
@@ -121,6 +127,14 @@ export default function AdminClients() {
                 <div className="mt-4 space-y-1.5 text-xs text-muted-foreground">
                   <div className="truncate">✉ {c.email}</div>
                   {c.phone && <div>☎ {c.phone}</div>}
+                  {c.business_names?.length > 1 && (
+                    <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                      <Building2 className="h-3 w-3" />
+                      {c.business_names.map((n) => (
+                        <span key={n} className="rounded-md border border-navy-600 px-1.5 py-0.5 text-[10px] font-medium text-mist">{n}</span>
+                      ))}
+                    </div>
+                  )}
                   {c.business_types?.length > 0 && (
                     <div className="flex flex-wrap items-center gap-1 pt-0.5">
                       <Store className="h-3 w-3" />
@@ -186,7 +200,7 @@ function ClientDialog({ client, onClose }) {
   const [errors, setErrors] = useState({});
   const [form, setForm] = useState({
     name: client.name ?? '',
-    store_name: client.store_name ?? '',
+    business_names: client.business_names?.length ? client.business_names : (client.store_name ? [client.store_name] : []),
     email: client.email ?? '',
     business_types: client.business_types ?? [],
     contact_person: client.contact_person ?? '',
@@ -198,6 +212,8 @@ function ClientDialog({ client, onClose }) {
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const err = (k) => errors[k]?.[0];
   const typeErr = Object.keys(errors).find((k) => k.startsWith('business_types.')) && 'Each business type must be under 100 characters.';
+  const nameErr = err('business_names') || err('store_name')
+    || (Object.keys(errors).find((k) => k.startsWith('business_names.')) && 'Each business name must be unique and under 255 characters.');
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -239,14 +255,26 @@ function ClientDialog({ client, onClose }) {
                 {isEdit ? 'Update this client’s business profile and contact details.' : 'Create a rich client profile. A temporary password will be generated.'}
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={(e) => { e.preventDefault(); setErrors({}); mutation.mutate(); }} className="space-y-4">
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (!form.business_names.length) {
+                setErrors({ business_names: ['Add at least one store / business name.'] });
+                return;
+              }
+              setErrors({});
+              mutation.mutate();
+            }} className="space-y-4">
+              <F label="Store / business names" e={nameErr}>
+                <TagInput value={form.business_names} onChange={(v) => setForm({ ...form, business_names: v })} splitOnComma={false}
+                  placeholder="e.g. Juan Laundry — press Enter to add another" />
+                <p className="text-[11px] text-muted-foreground">A client can own several businesses. The first one is the main name shown across the app.</p>
+              </F>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <F label="Store / business name" e={err('store_name')}><Input value={form.store_name} onChange={set('store_name')} required /></F>
                 <F label="Contact name" e={err('name')}><Input value={form.name} onChange={set('name')} required /></F>
                 <F label="Contact person" e={err('contact_person')}><Input value={form.contact_person} onChange={set('contact_person')} /></F>
                 <F label="Email" e={err('email')}><Input type="email" value={form.email} onChange={set('email')} required /></F>
                 <F label="Phone" e={err('phone')}><Input value={form.phone} onChange={set('phone')} /></F>
-                <F label="Address / branch" e={err('address')}><Input value={form.address} onChange={set('address')} /></F>
+                <div className="sm:col-span-2"><F label="Address / branch" e={err('address')}><Input value={form.address} onChange={set('address')} /></F></div>
               </div>
               <F label="Business types" e={err('business_types') || typeErr}>
                 <TagInput value={form.business_types} onChange={(v) => setForm({ ...form, business_types: v })}

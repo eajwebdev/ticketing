@@ -26,6 +26,7 @@ class ClientController extends Controller
                 ->orWhere('email', 'like', "%$s%")
                 ->orWhere('store_name', 'like', "%$s%")
                 // JSON columns compare case-sensitively in MySQL — cast to text first.
+                ->orWhereRaw('LOWER(CAST(business_names AS CHAR)) LIKE ?', ['%'.mb_strtolower($s).'%'])
                 ->orWhereRaw('LOWER(CAST(business_types AS CHAR)) LIKE ?', ['%'.mb_strtolower($s).'%']));
         }
 

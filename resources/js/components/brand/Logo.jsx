@@ -19,12 +19,18 @@ export function Logo({ className, size = 'md', variant = 'wordmark' }) {
     );
   }
 
-  const badge = { sm: 'h-9 w-9', md: 'h-11 w-11', lg: 'h-14 w-14' };
-  const title = { sm: 'text-base', md: 'text-lg', lg: 'text-2xl' };
-  const tag = { sm: 'text-[8px]', md: 'text-[9px]', lg: 'text-[11px]' };
+  // `sidebar` is a compact lockup sized to fit the 16rem app sidebar on one line.
+  const badge = { sm: 'h-9 w-9', md: 'h-11 w-11', lg: 'h-14 w-14', sidebar: 'h-10 w-10' };
+  const title = { sm: 'text-base', md: 'text-lg', lg: 'text-2xl', sidebar: 'text-lg' };
+  const tag = {
+    sm: 'text-[8px] tracking-[0.22em]',
+    md: 'text-[9px] tracking-[0.22em]',
+    lg: 'text-[11px] tracking-[0.22em]',
+    sidebar: 'text-[8px] tracking-[0.14em]',
+  };
 
   return (
-    <div className={cn('flex items-center gap-3', className)}>
+    <div className={cn('flex min-w-0 items-center', size === 'sidebar' ? 'gap-2.5' : 'gap-3', className)}>
       <img
         src="/logo1.jpg"
         alt="EAJ"
@@ -33,11 +39,11 @@ export function Logo({ className, size = 'md', variant = 'wordmark' }) {
           badge[size]
         )}
       />
-      <div className="leading-none">
-        <div className={cn('font-bold tracking-tight text-white', title[size])}>
+      <div className="min-w-0 leading-none">
+        <div className={cn('whitespace-nowrap font-bold tracking-tight text-white', title[size])}>
           EAJ <span className="grad-text">Support</span>
         </div>
-        <div className={cn('mt-1 font-medium uppercase tracking-[0.22em] text-muted-foreground', tag[size])}>
+        <div className={cn('mt-1.5 whitespace-nowrap font-medium uppercase text-muted-foreground', tag[size])}>
           Web Development Services
         </div>
       </div>

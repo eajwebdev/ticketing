@@ -51,6 +51,28 @@ export function GoogleSignInButton({ onCredential, text = 'continue_with', disab
   useEffect(() => {
     if (!clientId) return;
     let cancelled = false;
+    let observer;
+    let lastWidth = 0;
+
+    // Google caps its button at 400px; match the form width up to that.
+    const render = () => {
+      const el = ref.current;
+      if (cancelled || !el) return;
+      const width = Math.round(Math.min(400, Math.max(200, el.getBoundingClientRect().width || 320)));
+      if (width === lastWidth) return;
+      lastWidth = width;
+      el.innerHTML = '';
+      window.google.accounts.id.renderButton(el, {
+        type: 'standard',
+        theme: 'outline',
+        size: 'large',
+        shape: 'pill',
+        logo_alignment: 'center',
+        text,
+        width,
+      });
+    };
+
     loadGoogleScript()
       .then(() => {
         if (cancelled || !ref.current) return;
@@ -59,18 +81,18 @@ export function GoogleSignInButton({ onCredential, text = 'continue_with', disab
           callback: (res) => res?.credential && cb.current?.(res.credential),
           ux_mode: 'popup',
         });
-        window.google.accounts.id.renderButton(ref.current, {
-          type: 'standard',
-          theme: 'outline',
-          size: 'large',
-          shape: 'pill',
-          text,
-          width: Math.min(400, Math.max(200, ref.current.offsetWidth || 320)),
-        });
+        // Wait a frame so entrance animations/layout have settled, then
+        // re-fit whenever the form changes width (resize, rotate).
+        requestAnimationFrame(render);
+        if ('ResizeObserver' in window) {
+          observer = new ResizeObserver(() => requestAnimationFrame(render));
+          observer.observe(ref.current);
+        }
       })
       .catch(() => !cancelled && setFailed(true));
     return () => {
       cancelled = true;
+      observer?.disconnect();
     };
   }, [clientId, text]);
 
@@ -87,11 +109,17 @@ export function GoogleSignInButton({ onCredential, text = 'continue_with', disab
     );
   }
 
+  // `color-scheme: light` stops browsers painting a white box behind Google's
+  // iframe when the page itself is dark (the iframe only stays transparent
+  // when its color scheme matches the embedding element's).
   return (
-    <div
-      ref={ref}
-      className={`flex min-h-11 w-full justify-center ${disabled ? 'pointer-events-none opacity-60' : ''}`}
-    />
+    <div className={`w-full ${disabled ? 'pointer-events-none opacity-60' : ''}`}>
+      <div
+        ref={ref}
+        style={{ colorScheme: 'light' }}
+        className="flex min-h-11 w-full items-center justify-center [&_iframe]:!m-0"
+      />
+    </div>
   );
 }
 

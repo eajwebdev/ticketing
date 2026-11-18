@@ -24,6 +24,7 @@ class User extends Authenticatable
         'password',
         'role',
         'store_name',
+        'business_names',
         'business_types',
         'address',
         'contact_person',
@@ -65,20 +66,65 @@ class User extends Authenticatable
      */
     protected function businessTypes(): Attribute
     {
+        return self::jsonListAttribute();
+    }
+
+    /**
+     * Every business/store a client owns (e.g. ["Juan Laundry", "Juan Water Station"]).
+     * The first one is the primary name and is mirrored into `store_name`.
+     */
+    protected function businessNames(): Attribute
+    {
+        return self::jsonListAttribute();
+    }
+
+    /** JSON list of strings: trimmed, de-duplicated (case-insensitive), null when empty. */
+    private static function jsonListAttribute(): Attribute
+    {
         return Attribute::make(
             get: fn (?string $value) => $value ? (json_decode($value, true) ?: []) : [],
-            set: function ($value) {
-                $types = [];
-                foreach ((array) $value as $t) {
-                    $t = trim((string) $t);
-                    if ($t !== '' && ! in_array(mb_strtolower($t), array_map('mb_strtolower', $types), true)) {
-                        $types[] = $t;
-                    }
-                }
-
-                return $types ? json_encode($types, JSON_UNESCAPED_UNICODE) : null;
-            },
+            set: fn ($value) => ($list = self::normalizeList($value))
+                ? json_encode($list, JSON_UNESCAPED_UNICODE) : null,
         );
+    }
+
+    private static function normalizeList($value): array
+    {
+        $list = [];
+        foreach ((array) $value as $item) {
+            $item = trim((string) $item);
+            if ($item !== '' && ! in_array(mb_strtolower($item), array_map('mb_strtolower', $list), true)) {
+                $list[] = $item;
+            }
+        }
+
+        return $list;
+    }
+
+    /**
+     * Keep `store_name` (primary, shown everywhere) and `business_names` (full list)
+     * in sync whichever one a form changed.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (User $user) {
+            if ($user->isDirty('business_names')) {
+                $user->store_name = $user->business_names[0] ?? null;
+
+                return;
+            }
+
+            if ($user->isDirty('store_name')) {
+                $old = mb_strtolower(trim((string) $user->getOriginal('store_name')));
+                $names = array_values(array_filter(
+                    $user->business_names,
+                    fn ($n) => mb_strtolower($n) !== $old
+                ));
+                $new = trim((string) $user->store_name);
+                $user->business_names = $new !== '' ? [$new, ...$names] : $names;
+                $user->store_name = $user->business_names[0] ?? null;
+            }
+        });
     }
 
     public function isApproved(): bool

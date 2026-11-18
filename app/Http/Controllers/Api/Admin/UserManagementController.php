@@ -46,6 +46,7 @@ class UserManagementController extends Controller
             $query->where(fn ($q) => $q->where('name', 'like', "%$s%")
                 ->orWhere('email', 'like', "%$s%")
                 ->orWhere('store_name', 'like', "%$s%")
+                ->orWhereRaw('LOWER(CAST(business_names AS CHAR)) LIKE ?', ['%'.mb_strtolower($s).'%'])
                 ->orWhere('position', 'like', "%$s%"));
         }
 

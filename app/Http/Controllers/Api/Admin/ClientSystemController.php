@@ -45,6 +45,7 @@ class ClientSystemController extends Controller
             $query->where(fn ($q) => $q->where('label', 'like', "%$s%")
                 ->orWhereHas('client', fn ($c) => $c->where('name', 'like', "%$s%")
                     ->orWhere('store_name', 'like', "%$s%")
+                    ->orWhereRaw('LOWER(CAST(business_names AS CHAR)) LIKE ?', ['%'.mb_strtolower($s).'%'])
                     ->orWhere('email', 'like', "%$s%"))
                 ->orWhereHas('systemType', fn ($t) => $t->where('name', 'like', "%$s%")));
         }

@@ -71,8 +71,9 @@ function SidebarContent({ onNavigate }) {
   const items = navItems(user);
   return (
     <div className="flex h-full flex-col gap-1 p-4">
-      <Link to="/app" className="mb-4 flex justify-center px-2 py-1" onClick={onNavigate}>
-        <Logo size="lg" />
+      <Link to="/app" onClick={onNavigate}
+        className="-mx-1 mb-3 flex items-center border-b border-navy-600/60 px-2 pb-4 pt-1 transition-opacity hover:opacity-90">
+        <Logo size="sidebar" />
       </Link>
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto">
         {items.map((item, i) =>

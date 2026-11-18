@@ -5,15 +5,16 @@ import { cn } from '@/lib/utils';
 const norm = (s) => s.trim().toLowerCase();
 
 /**
- * Multi-value text input: type a value, press Enter or comma to add it as a chip.
+ * Multi-value text input: type a value, press Enter (or comma, unless splitOnComma
+ * is false — e.g. business names like "Cruz, Inc.") to add it as a chip.
  * Backspace on an empty field removes the last chip. Text left in the field is
  * added on blur, so it isn't lost when the form is submitted.
  */
-export function TagInput({ value = [], onChange, placeholder, suggestions = [], max = 20, className }) {
+export function TagInput({ value = [], onChange, placeholder, suggestions = [], max = 20, splitOnComma = true, className }) {
   const [text, setText] = useState('');
 
   const add = (raw) => {
-    const parts = raw.split(',').map((s) => s.trim()).filter(Boolean);
+    const parts = (splitOnComma ? raw.split(',') : [raw]).map((s) => s.trim()).filter(Boolean);
     if (!parts.length) return;
     const next = [...value];
     parts.forEach((p) => {
@@ -26,7 +27,7 @@ export function TagInput({ value = [], onChange, placeholder, suggestions = [], 
   const remove = (i) => onChange(value.filter((_, idx) => idx !== i));
 
   const onKeyDown = (e) => {
-    if (e.key === 'Enter' || e.key === ',') {
+    if (e.key === 'Enter' || (splitOnComma && e.key === ',')) {
       e.preventDefault(); // don't submit the surrounding form
       add(text);
     } else if (e.key === 'Backspace' && !text && value.length) {
@@ -56,7 +57,7 @@ export function TagInput({ value = [], onChange, placeholder, suggestions = [], 
         ))}
         <input
           value={text}
-          onChange={(e) => (e.target.value.includes(',') ? add(e.target.value) : setText(e.target.value))}
+          onChange={(e) => (splitOnComma && e.target.value.includes(',') ? add(e.target.value) : setText(e.target.value))}
           onKeyDown={onKeyDown}
           onBlur={() => add(text)}
           placeholder={value.length ? 'Add another…' : placeholder}
