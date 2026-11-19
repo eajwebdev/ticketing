@@ -125,6 +125,24 @@ Route::prefix('v1')->group(function () {
                 Route::post('expenses', [\App\Http\Controllers\Api\Admin\ExpenseController::class, 'store']);
                 Route::patch('expenses/{expense}', [\App\Http\Controllers\Api\Admin\ExpenseController::class, 'update']);
                 Route::delete('expenses/{expense}', [\App\Http\Controllers\Api\Admin\ExpenseController::class, 'destroy']);
+
+                // Payouts — what we pay team members / agents on a schedule; each payment is an expense.
+                Route::get('payouts', [\App\Http\Controllers\Api\Admin\PayoutController::class, 'index']);
+                Route::post('payouts', [\App\Http\Controllers\Api\Admin\PayoutController::class, 'store']);
+                Route::patch('payouts/{payout}', [\App\Http\Controllers\Api\Admin\PayoutController::class, 'update']);
+                Route::delete('payouts/{payout}', [\App\Http\Controllers\Api\Admin\PayoutController::class, 'destroy']);
+                Route::post('payouts/{payout}/pay', [\App\Http\Controllers\Api\Admin\PayoutController::class, 'pay']);
+                Route::get('payouts/{payout}/payments', [\App\Http\Controllers\Api\Admin\PayoutController::class, 'payments']);
+                Route::delete('payouts/{payout}/payments/{expense}', [\App\Http\Controllers\Api\Admin\PayoutController::class, 'voidPayment']);
+            });
+
+            // Company subscriptions — domains, hosting, VPS and their expiry.
+            Route::middleware('perm:subscriptions.manage')->group(function () {
+                Route::get('subscriptions', [\App\Http\Controllers\Api\Admin\SubscriptionController::class, 'index']);
+                Route::post('subscriptions', [\App\Http\Controllers\Api\Admin\SubscriptionController::class, 'store']);
+                Route::patch('subscriptions/{subscription}', [\App\Http\Controllers\Api\Admin\SubscriptionController::class, 'update']);
+                Route::delete('subscriptions/{subscription}', [\App\Http\Controllers\Api\Admin\SubscriptionController::class, 'destroy']);
+                Route::post('subscriptions/{subscription}/renew', [\App\Http\Controllers\Api\Admin\SubscriptionController::class, 'renew']);
             });
 
             // Client list is also needed by billing/leads/ticket staff to pick a client.

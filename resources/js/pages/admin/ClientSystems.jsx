@@ -238,6 +238,19 @@ function SystemRow({ s, isAdmin, canSeeCreds, focused, onAction }) {
                 <CheckCircle2 className="h-3 w-3" /> {peso(s.setup_fee)} setup paid
               </div>
             )}
+            {s.payouts?.length > 0 && (
+              <div className="mt-1 text-[11px] text-sky-400"
+                title={s.payouts.map((p) => `${p.payee_name} · ${p.category}: ${peso(p.amount)}${p.cycle === 'once' ? ' one-time' : CYCLE_SUFFIX[p.cycle] ?? ''}`).join(', ')}>
+                {(() => {
+                  const monthly = s.payouts.reduce((t, p) => t + p.monthly_value, 0);
+                  const once = s.payouts.filter((p) => p.cycle === 'once');
+                  return [
+                    monthly > 0 && `− ${peso(monthly)}/mo payouts · we keep ${peso(s.net_monthly)}/mo`,
+                    once.length > 0 && `${peso(once.reduce((t, p) => t + p.amount, 0))} one-time payout`,
+                  ].filter(Boolean).join(' · ');
+                })()}
+              </div>
+            )}
           </div>
         )}
         <div className="min-w-32">
@@ -564,7 +577,7 @@ function dueAfterCycles(iso, cycle, anchorDay, cycles) {
   return target;
 }
 
-function PayDialog({ system, onClose, onSaved }) {
+export function PayDialog({ system, onClose, onSaved }) {
   const [errors, setErrors] = useState({});
   const [form, setForm] = useState({ amount: system.amount, cycles: 1, paid_at: todayISO(), method: 'cash', reference: '', notes: '' });
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -652,7 +665,7 @@ function PayDialog({ system, onClose, onSaved }) {
 }
 
 /** Record the one-time setup fee. Doesn't move the subscription due date. */
-function SetupPayDialog({ system, onClose, onSaved }) {
+export function SetupPayDialog({ system, onClose, onSaved }) {
   const [errors, setErrors] = useState({});
   const [form, setForm] = useState({ amount: system.setup_fee, paid_at: todayISO(), method: 'cash', reference: '', notes: '' });
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });

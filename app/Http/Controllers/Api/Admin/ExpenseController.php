@@ -115,6 +115,8 @@ class ExpenseController extends Controller
             'reference' => $e->reference,
             'notes' => $e->notes,
             'recorded_by' => $e->recorder ? ['id' => $e->recorder->id, 'name' => $e->recorder->name] : null,
+            // Set when this came from "Mark paid" on a payout (deleting the latest one undoes it).
+            'payout_id' => $e->payout_id,
             'created_at' => $e->created_at,
         ];
     }

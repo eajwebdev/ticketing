@@ -21,7 +21,7 @@ class ClientSystemController extends Controller
     {
         abort_unless($request->user()->canAccessClientSystems(), 403);
 
-        $query = ClientSystem::with(['client', 'systemType'])
+        $query = ClientSystem::with(['client', 'systemType', 'payouts' => fn ($q) => $q->where('status', 'active')])
             ->addSelect(['last_paid_at' => SystemPayment::select('paid_at')
                 ->whereColumn('client_system_id', 'client_systems.id')
                 ->latest('paid_at')->limit(1)])

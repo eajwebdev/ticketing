@@ -1,7 +1,7 @@
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   Ticket, PlusCircle, Inbox, ArrowRight, Users, LayoutDashboard, Wallet, Receipt, Headset, KanbanSquare,
-  WifiOff, RefreshCw,
+  WifiOff, RefreshCw, HandCoins,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTickets } from '@/hooks/queries';
@@ -15,6 +15,7 @@ import { useDashboard, LiveBadge, TabSkeleton } from './dashboard/widgets';
 import OverviewTab from './dashboard/OverviewTab';
 import FinanceTab from './dashboard/FinanceTab';
 import ExpensesTab from './dashboard/ExpensesTab';
+import PayoutsTab from './dashboard/PayoutsTab';
 import SupportTab from './dashboard/SupportTab';
 import WorkTab from './dashboard/WorkTab';
 
@@ -33,6 +34,7 @@ export default function Dashboard() {
 const TABS = {
   overview: { label: 'Overview', icon: LayoutDashboard, Component: OverviewTab },
   finance: { label: 'Finance', icon: Wallet, Component: FinanceTab },
+  payouts: { label: 'Payouts', icon: HandCoins, Component: PayoutsTab },
   expenses: { label: 'Expenses', icon: Receipt, Component: ExpensesTab },
   support: { label: 'Support', icon: Headset, Component: SupportTab },
   work: { label: 'Tasks & Leads', icon: KanbanSquare, Component: WorkTab },
@@ -48,6 +50,11 @@ function tabBadge(key, data) {
     case 'finance': {
       const n = data.finance?.receivables.overdue_count ?? 0;
       return n ? { n, urgent: true } : null;
+    }
+    case 'payouts': {
+      const p = data.finance?.payouts;
+      if (!p) return null;
+      return p.overdue_count ? { n: p.overdue_count, urgent: true } : p.due_soon_count ? { n: p.due_soon_count, urgent: false } : null;
     }
     case 'support': {
       const s = data.support;

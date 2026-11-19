@@ -8,6 +8,7 @@ export const P = {
   ANALYTICS: 'analytics.view',
   TASKS_MANAGE: 'tasks.manage',
   LEADS: 'leads.manage',
+  SUBSCRIPTIONS: 'subscriptions.manage',
   SETTINGS: 'settings.manage',
 };
 

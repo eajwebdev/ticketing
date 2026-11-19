@@ -16,11 +16,12 @@ final class Permissions
     public const ANALYTICS = 'analytics.view';
     public const TASKS_MANAGE = 'tasks.manage';     // edit/delete anyone's tasks
     public const LEADS = 'leads.manage';            // sales pipeline
+    public const SUBSCRIPTIONS = 'subscriptions.manage'; // company domains, hosting, VPS & their expiry
     public const SETTINGS = 'settings.manage';      // users, roles, systems, categories (admin)
 
     public const ALL = [
         self::TICKETS, self::CLIENTS, self::SYSTEMS_VIEW, self::CREDENTIALS, self::BILLING,
-        self::ANALYTICS, self::TASKS_MANAGE, self::LEADS, self::SETTINGS,
+        self::ANALYTICS, self::TASKS_MANAGE, self::LEADS, self::SUBSCRIPTIONS, self::SETTINGS,
     ];
 
     public const LABELS = [
@@ -32,6 +33,7 @@ final class Permissions
         self::ANALYTICS => ['Analytics', 'Support performance dashboards'],
         self::TASKS_MANAGE => ['Manage all tasks', 'Edit or delete anyone’s tasks (everyone can manage their own)'],
         self::LEADS => ['Leads pipeline', 'Track prospects and convert them to clients'],
+        self::SUBSCRIPTIONS => ['Subscriptions', 'Domains, hosting & VPS the company pays for, and their expiry dates'],
         self::SETTINGS => ['Settings & users', 'Users, roles, systems, categories (owner-level)'],
     ];
 }

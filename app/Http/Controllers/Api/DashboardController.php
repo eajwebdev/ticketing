@@ -8,6 +8,7 @@ use App\Http\Resources\ClientSystemResource;
 use App\Models\ClientSystem;
 use App\Models\Expense;
 use App\Models\Lead;
+use App\Models\Payout;
 use App\Models\SystemPayment;
 use App\Models\Task;
 use App\Models\Ticket;
@@ -41,6 +42,7 @@ class DashboardController extends Controller
             'sections' => array_values(array_filter([
                 'overview',
                 $canFinance ? 'finance' : null,
+                $canFinance ? 'payouts' : null,
                 $canFinance ? 'expenses' : null,
                 $canSupport ? 'support' : null,
                 'work',
@@ -119,6 +121,16 @@ class DashboardController extends Controller
                     'paid_at' => Carbon::parse($p->paid_at)->toDateString(),
                     'method' => $p->method,
                 ]),
+            // One-time setup fees still to collect — paid straight from the dashboard.
+            'setup_unpaid' => ClientSystemResource::collection(
+                ClientSystem::with(['client', 'systemType'])->setupUnpaid()->orderBy('started_on')->limit(8)->get()
+            ),
+            // What we owe people (developer, marketing, agents' commissions).
+            'payouts' => [
+                ...\App\Http\Controllers\Api\Admin\PayoutController::summary(),
+                'due' => Payout::with(\App\Http\Controllers\Api\Admin\PayoutController::RELATIONS)->dueSoon()
+                    ->orderBy('next_due_date')->limit(10)->get()->map->present()->values(),
+            ],
             'recent_expenses' => Expense::orderByDesc('spent_on')->orderByDesc('id')->limit(6)->get()
                 ->map(fn ($e) => [
                     'id' => $e->id, 'description' => $e->description, 'category' => $e->category,
@@ -293,6 +305,12 @@ class DashboardController extends Controller
                     'kind' => 'billing', 'severity' => 3, 'title' => ($s->client?->store_name ?: $s->client?->name).' is overdue',
                     'subtitle' => $s->displayName().' · ₱'.number_format((float) $s->amount, 2).' since '.$s->next_due_date->format('M j'),
                     'link' => "/app/admin/client-systems?focus={$s->id}", 'at' => $s->next_due_date,
+                ]));
+            Payout::overdue()->orderBy('next_due_date')->limit(5)->get()
+                ->each(fn ($p) => $items->push([
+                    'kind' => 'payout', 'severity' => 2, 'title' => "Pay {$p->payee_name}: {$p->category}",
+                    'subtitle' => '₱'.number_format((float) $p->amount, 2).' · was due '.$p->next_due_date->format('M j'),
+                    'link' => '/app?tab=payouts', 'at' => $p->next_due_date,
                 ]));
             ClientSystem::with(['client', 'systemType'])->setupUnpaid()->orderBy('started_on')->limit(5)->get()
                 ->each(fn ($s) => $items->push([

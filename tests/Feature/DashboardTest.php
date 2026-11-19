@@ -56,7 +56,7 @@ class DashboardTest extends TestCase
 
         $res = $this->getJson('/api/v1/dashboard')->assertOk();
 
-        $res->assertJsonPath('sections', ['overview', 'finance', 'expenses', 'support', 'work'])
+        $res->assertJsonPath('sections', ['overview', 'finance', 'payouts', 'expenses', 'support', 'work'])
             ->assertJsonPath('finance.month.revenue', 1500)
             ->assertJsonPath('finance.month.expenses', 400)
             ->assertJsonPath('finance.month.net', 1100)

@@ -44,14 +44,14 @@ enum Role: string
             self::Admin => Permissions::ALL,
             self::Manager => [
                 Permissions::TICKETS, Permissions::CLIENTS, Permissions::SYSTEMS_VIEW,
-                Permissions::ANALYTICS, Permissions::TASKS_MANAGE, Permissions::LEADS,
+                Permissions::ANALYTICS, Permissions::TASKS_MANAGE, Permissions::LEADS, Permissions::SUBSCRIPTIONS,
             ],
             self::Developer => [Permissions::TICKETS, Permissions::SYSTEMS_VIEW],
             self::Designer => [],
             self::Qa => [Permissions::TICKETS],
             self::Support => [Permissions::TICKETS, Permissions::CLIENTS, Permissions::SYSTEMS_VIEW],
             self::Marketing => [Permissions::LEADS, Permissions::CLIENTS],
-            self::Finance => [Permissions::BILLING, Permissions::SYSTEMS_VIEW, Permissions::ANALYTICS],
+            self::Finance => [Permissions::BILLING, Permissions::SYSTEMS_VIEW, Permissions::ANALYTICS, Permissions::SUBSCRIPTIONS],
         };
     }
 

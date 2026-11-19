@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Ticket, Bell, BarChart3, Users, Building2,
   SlidersHorizontal, UserCog, LogOut, Menu, X, ChevronDown, MonitorCog, ServerCog, Wallet,
-  KanbanSquare, Target, Sun, Moon,
+  KanbanSquare, Target, Sun, Moon, Globe,
 } from 'lucide-react';
 import { can, isTeamUser, P } from '@/lib/permissions';
 import { useTheme, useApplyTheme } from '@/context/ThemeContext';
@@ -40,6 +40,7 @@ function navItems(user) {
     can(user, P.CLIENTS) && { to: '/app/admin/clients', icon: Building2, label: 'Clients' },
     can(user, P.SYSTEMS_VIEW, P.CREDENTIALS, P.BILLING) && { to: '/app/admin/client-systems', icon: ServerCog, label: 'Client Systems' },
     can(user, P.BILLING) && { to: '/app/admin/sales', icon: Wallet, label: 'Sales' },
+    can(user, P.SUBSCRIPTIONS) && { to: '/app/admin/subscriptions', icon: Globe, label: 'Subscriptions' },
 
     { section: 'Insights' },
     can(user, P.ANALYTICS) && { to: '/app/admin/analytics', icon: BarChart3, label: 'Analytics' },

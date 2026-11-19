@@ -23,6 +23,7 @@ import AdminUsers from '@/pages/admin/Users';
 import Analytics from '@/pages/admin/Analytics';
 import ClientSystems from '@/pages/admin/ClientSystems';
 import Sales from '@/pages/admin/Sales';
+import Subscriptions from '@/pages/admin/Subscriptions';
 
 import Tasks from '@/pages/Tasks';
 import Leads from '@/pages/Leads';
@@ -86,6 +87,7 @@ export default function App() {
         <Route path="admin/clients" element={<Perm any={[P.CLIENTS]}><AdminClients /></Perm>} />
         <Route path="admin/client-systems" element={<Perm any={[P.SYSTEMS_VIEW, P.CREDENTIALS, P.BILLING]}><ClientSystems /></Perm>} />
         <Route path="admin/sales" element={<Perm any={[P.BILLING]}><Sales /></Perm>} />
+        <Route path="admin/subscriptions" element={<Perm any={[P.SUBSCRIPTIONS]}><Subscriptions /></Perm>} />
         <Route path="admin/systems" element={<Perm any={[P.SETTINGS]}><AdminSystems /></Perm>} />
         <Route path="admin/team" element={<Perm any={[P.SETTINGS]}><AdminTeam /></Perm>} />
         <Route path="admin/lookups" element={<Perm any={[P.SETTINGS]}><AdminLookups /></Perm>} />

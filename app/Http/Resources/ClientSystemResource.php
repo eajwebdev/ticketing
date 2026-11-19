@@ -52,6 +52,13 @@ class ClientSystemResource extends JsonResource
             'login_url' => $this->login_url,
             'has_credentials' => $this->hasCredentials(),
             'notes' => $this->when($isAdmin, $this->notes),
+            // Commissions etc. paid out because of this system, and what we keep after them.
+            'payouts' => $this->when($isAdmin && $this->relationLoaded('payouts'), fn () => $this->payouts->map(fn ($p) => [
+                'id' => $p->id, 'payee_name' => $p->payee_name, 'category' => $p->category,
+                'amount' => (float) $p->amount, 'cycle' => $p->cycle, 'monthly_value' => $p->monthlyValue(),
+            ])->values()),
+            'net_monthly' => $this->when($isAdmin && $this->relationLoaded('payouts'),
+                fn () => round($this->monthlyValue() - $this->payouts->sum(fn ($p) => $p->monthlyValue()), 2)),
             'last_paid_at' => $this->when($isAdmin && isset($this->last_paid_at), fn () => $this->last_paid_at),
             'created_at' => $this->created_at,
         ];

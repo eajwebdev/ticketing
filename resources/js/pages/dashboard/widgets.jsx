@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import {
   RefreshCw, TrendingUp, TrendingDown, Minus, WifiOff, CheckCircle2, ChevronRight,
-  ShieldAlert, Inbox, Wallet, KanbanSquare, Target, Wrench,
+  ShieldAlert, Inbox, Wallet, KanbanSquare, Target, Wrench, HandCoins,
 } from 'lucide-react';
 import {
   ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -283,6 +283,7 @@ const KIND = {
   waiting: { icon: Inbox, label: 'Ticket' },
   billing: { icon: Wallet, label: 'Billing' },
   setup: { icon: Wrench, label: 'Setup fee' },
+  payout: { icon: HandCoins, label: 'Payout' },
   task: { icon: KanbanSquare, label: 'Task' },
   lead: { icon: Target, label: 'Lead' },
 };

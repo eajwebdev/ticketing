@@ -15,3 +15,7 @@ Schedule::command('billing:remind')->hourly()->between('7:00', '21:00')->without
 
 // Tasks due/overdue → assignee; lead follow-ups → owner. Once a day each.
 Schedule::command('work:remind')->hourly()->between('7:00', '21:00')->withoutOverlapping();
+
+// Domains / hosting / VPS: email Owner/Admin users 30, 14, 7, 3 and 1 day(s)
+// before expiry, on the day, and daily once expired. Once a day per item at most.
+Schedule::command('subscriptions:remind')->hourly()->between('7:00', '21:00')->withoutOverlapping();

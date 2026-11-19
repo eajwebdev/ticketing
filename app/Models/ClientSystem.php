@@ -78,6 +78,12 @@ class ClientSystem extends Model
         return $this->hasMany(SystemPayment::class)->latest('paid_at')->latest('id');
     }
 
+    /** People we pay because of this system — e.g. an outside agent's commission. */
+    public function payouts(): HasMany
+    {
+        return $this->hasMany(Payout::class);
+    }
+
     public function scopeActive($query)
     {
         return $query->where('status', 'active');

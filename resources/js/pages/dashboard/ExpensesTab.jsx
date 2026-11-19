@@ -145,6 +145,7 @@ export default function ExpensesTab() {
                       <div className="truncate text-sm font-medium text-mist">{e.description}</div>
                       <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
                         <span className="inline-flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} />{e.category}</span>
+                        {e.payout_id && <span className="rounded bg-violet-500/15 px-1 text-[10px] text-violet-300">Payout</span>}
                         {e.payee && <span className="truncate">· {e.payee}</span>}
                         {e.method && <span>· {METHOD_LABELS[e.method] ?? e.method}</span>}
                         {e.reference && <span className="truncate">· #{e.reference}</span>}
@@ -200,6 +201,7 @@ export default function ExpensesTab() {
             <AlertDialogTitle>Delete this expense?</AlertDialogTitle>
             <AlertDialogDescription>
               {deleting && `${deleting.description} · ${peso(deleting.amount)}. This can't be undone.`}
+              {deleting?.payout_id && ' If it is the latest payment of a payout, that payout goes back to unpaid.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

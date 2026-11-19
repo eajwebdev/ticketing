@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 const ICONS = {
   mention: AtSign, assignment: UserPlus, message: MessageSquare, status: CheckCircle2,
   billing_due: CalendarClock, billing_due_today: CalendarClock, billing_overdue: AlertTriangle,
+  subscription_expiring: CalendarClock, subscription_expires_today: CalendarClock, subscription_expired: AlertTriangle,
   task_assigned: KanbanSquare, task_due: KanbanSquare, lead_assigned: Target, lead_follow_up: Target,
 };
 
