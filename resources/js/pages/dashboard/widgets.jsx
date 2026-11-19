@@ -24,10 +24,11 @@ export const LIVE_INTERVAL = 30_000;
  * while the tab is hidden and refetches the moment it's focused again, and
  * keeps showing the last good data if a request fails.
  */
-export function useDashboard() {
+export function useDashboard(range) {
   return useQuery({
-    queryKey: ['dashboard'],
-    queryFn: async () => (await api.get('/dashboard')).data,
+    queryKey: ['dashboard', range ?? null],
+    queryFn: async () => (await api.get('/dashboard', { params: range ?? {} })).data,
+    placeholderData: (prev) => prev, // keep the old numbers on screen while a new range loads
     refetchInterval: LIVE_INTERVAL,
     refetchOnWindowFocus: true,
     staleTime: 10_000,
@@ -92,7 +93,7 @@ export function pctChange(cur, prev) {
 }
 
 /** ▲ 12% — green when it's good news. `invert` for costs, where up is bad. */
-export function Delta({ value, invert = false, suffix = 'vs last month' }) {
+export function Delta({ value, invert = false, suffix = 'vs previous period' }) {
   if (value == null) return null;
   const good = invert ? value <= 0 : value >= 0;
   const Icon = value === 0 ? Minus : value > 0 ? TrendingUp : TrendingDown;

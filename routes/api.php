@@ -129,6 +129,7 @@ Route::prefix('v1')->group(function () {
                 // Payouts — what we pay team members / agents on a schedule; each payment is an expense.
                 Route::get('payouts', [\App\Http\Controllers\Api\Admin\PayoutController::class, 'index']);
                 Route::post('payouts', [\App\Http\Controllers\Api\Admin\PayoutController::class, 'store']);
+                Route::post('payouts/pay-bulk', [\App\Http\Controllers\Api\Admin\PayoutController::class, 'payBulk']);
                 Route::patch('payouts/{payout}', [\App\Http\Controllers\Api\Admin\PayoutController::class, 'update']);
                 Route::delete('payouts/{payout}', [\App\Http\Controllers\Api\Admin\PayoutController::class, 'destroy']);
                 Route::post('payouts/{payout}/pay', [\App\Http\Controllers\Api\Admin\PayoutController::class, 'pay']);

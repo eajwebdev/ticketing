@@ -22,9 +22,13 @@ class Payout extends Model
     ];
 
     /** Suggestions — free text is allowed. Paid payouts land in Expenses under this category. */
-    public const CATEGORIES = ['Maintenance', 'Marketing', 'Commission', 'Salaries & Payroll', 'Other'];
+    public const CATEGORIES = [
+        'Salaries & Payroll', 'Maintenance', 'Marketing', 'Commission',
+        'Rent & Utilities', 'Internet & Phone', 'Software & Subscriptions', 'Other',
+    ];
 
-    public const PAYEE_KINDS = ['team', 'external'];
+    /** team = a user; external = outside person/agent; bill = a company bill (rent, internet, software…). */
+    public const PAYEE_KINDS = ['team', 'external', 'bill'];
 
     public const STATUSES = ['active', 'paused', 'completed'];
 

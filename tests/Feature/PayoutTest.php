@@ -154,6 +154,46 @@ class PayoutTest extends TestCase
         $this->assertTrue(collect($res->json('attention'))->contains(fn ($a) => $a['kind'] === 'payout' && str_contains($a['title'], 'Agent Ana')));
     }
 
+    public function test_pay_all_due_in_one_click(): void
+    {
+        $ids = $this->scenario(); // dev + marketing due Mar 31, agent due Mar 20
+        $rent = $this->addPayout(['payee_kind' => 'bill', 'payee_name' => 'Office rent', 'category' => 'Rent & Utilities', 'amount' => 8000]);
+        $paused = $this->addPayout(['payee_user_id' => $this->dev->id, 'category' => 'Salaries & Payroll', 'amount' => 10000]);
+        Payout::find($paused)->update(['status' => 'paused']);
+
+        $this->getJson('/api/v1/admin/payouts')
+            ->assertJsonPath('summary.due_this_month_count', 4)
+            ->assertJsonPath('summary.due_this_month_amount', 13500);
+
+        $this->postJson('/api/v1/admin/payouts/pay-bulk', [
+            'ids' => [...array_values($ids), $rent, $paused], 'paid_on' => '2026-03-10',
+        ])->assertCreated()
+            ->assertJsonPath('paid_count', 4)
+            ->assertJsonPath('paid_total', 13500)
+            ->assertJsonPath('skipped', 1);                   // the paused one
+
+        $this->assertSame(4, Expense::count());
+        $this->assertSame('Office rent', Expense::where('payout_id', $rent)->value('payee'));
+        $this->assertSame('gcash', Expense::where('payout_id', $ids['agent'])->value('method')); // usual method kept
+        $this->assertSame('2026-04-30', Payout::find($ids['dev'])->next_due_date->toDateString());
+        $this->assertSame('2026-03-31', Payout::find($paused)->next_due_date->toDateString()); // untouched
+
+        Expense::create(['spent_on' => '2026-03-05', 'category' => 'Office Supplies', 'description' => 'Printer ink', 'amount' => 500]);
+        \App\Models\SystemPayment::create([
+            'client_system_id' => $this->system->id, 'client_id' => $this->system->client_id, 'system_type_id' => $this->system->system_type_id,
+            'amount' => 15000, 'paid_at' => '2026-03-08', 'method' => 'cash',
+            'covered_due_date' => '2026-03-15', 'next_due_date' => '2026-04-15',
+        ]);
+
+        // Overview earnings: gross 15,000 − fixed 13,500 − other 500 = 1,000.
+        $this->getJson('/api/v1/dashboard')
+            ->assertJsonPath('finance.month.revenue', 15000)
+            ->assertJsonPath('finance.month.fixed_paid', 13500)
+            ->assertJsonPath('finance.month.other_expenses', 500)
+            ->assertJsonPath('finance.month.net', 1000)
+            ->assertJsonPath('finance.payouts.due_this_month_count', 0);
+    }
+
     public function test_only_billing_staff_manage_payouts(): void
     {
         Sanctum::actingAs($this->dev);

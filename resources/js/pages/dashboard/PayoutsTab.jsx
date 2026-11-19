@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import {
   HandCoins, Plus, Pencil, Trash2, History, BadgeCheck, Users, Handshake, PiggyBank, CalendarClock, Wallet,
-  PieChart, Undo2, Link2,
+  PieChart, Undo2, Link2, Receipt, CheckCheck,
 } from 'lucide-react';
 import api from '@/lib/api';
 import { peso, METHOD_LABELS, DUE_META, dueLabel, localDate, todayISO } from '@/lib/format';
@@ -35,6 +35,16 @@ const STATUS_META = {
   completed: { label: 'Paid (one-time)', color: '#22C55E', bg: 'rgba(34,197,94,0.15)' },
 };
 const fmtDate = (iso) => (iso ? format(localDate(iso), 'MMM d, yyyy') : '—');
+const PAYEE_KINDS = {
+  team: { icon: Users, label: 'Team member' },
+  external: { icon: Handshake, label: 'Outside person / agent', tag: 'External', tagClass: 'bg-sky-500/15 text-sky-400' },
+  bill: { icon: Receipt, label: 'Company bill', tag: 'Bill', tagClass: 'bg-amber-500/15 text-amber-400' },
+};
+const endOfMonthISO = () => {
+  const d = new Date();
+  const e = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  return `${e.getFullYear()}-${String(e.getMonth() + 1).padStart(2, '0')}-${String(e.getDate()).padStart(2, '0')}`;
+};
 
 /** Does the linked client owe us right now? Shown so you know if the money is in before paying a commission. */
 export function clientStatus(cs) {
@@ -79,9 +89,16 @@ export default function PayoutsTab() {
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
-          What we pay people each month — maintenance, marketing, commissions. Each payment is saved as an expense.
+          Every regular cost — salaries, maintenance, marketing, commissions, rent, bills. Each payment is saved as an expense.
         </p>
-        <Button onClick={() => open('edit')} className="self-start sm:self-auto"><Plus /> Add payout</Button>
+        <div className="flex flex-wrap gap-2 self-start sm:self-auto">
+          {s?.due_this_month_count > 0 && (
+            <Button variant="outline" onClick={() => open('payAll')}>
+              <CheckCheck /> Pay all due ({s.due_this_month_count}) · {peso(s.due_this_month_amount)}
+            </Button>
+          )}
+          <Button onClick={() => open('edit')}><Plus /> Add payout</Button>
+        </div>
       </div>
 
       {isLoading && !data ? (
@@ -111,7 +128,7 @@ export default function PayoutsTab() {
             </ul>
           ) : (
             <EmptyState icon={HandCoins} title="No payouts yet"
-              description="Add your developer's maintenance fee, marketing allowance or an agent's commission."
+              description="Add salaries, your developer's maintenance fee, marketing, an agent's commission, rent or other monthly bills."
               action={<Button onClick={() => open('edit')}><Plus /> Add payout</Button>} />
           )}
           {done.length > 0 && (
@@ -132,6 +149,7 @@ export default function PayoutsTab() {
 
       {dialog?.kind === 'edit' && <PayoutDialog payout={dialog.payout} meta={data} onClose={() => setDialog(null)} onSaved={refresh} />}
       {dialog?.kind === 'pay' && <PayoutPayDialog payout={dialog.payout} onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'payAll' && <PayAllDialog onClose={() => setDialog(null)} />}
       {dialog?.kind === 'history' && <PayoutHistoryDialog payout={dialog.payout} onClose={() => setDialog(null)} />}
       <AlertDialog open={dialog?.kind === 'delete'} onOpenChange={(v) => !v && setDialog(null)}>
         <AlertDialogContent>
@@ -160,7 +178,8 @@ export function PayoutRow({ p, onAction, compact = false }) {
   const meta = STATUS_META[p.due_state] ?? DUE_META.upcoming;
   const cs = p.client_system;
   const client = clientStatus(cs);
-  const PayeeIcon = p.payee_kind === 'external' ? Handshake : Users;
+  const kind = PAYEE_KINDS[p.payee_kind] ?? PAYEE_KINDS.team;
+  const PayeeIcon = kind.icon;
 
   return (
     <li className="group flex flex-col gap-2 rounded-xl bg-navy-800/50 px-3 py-2.5 sm:flex-row sm:items-center sm:gap-3">
@@ -170,7 +189,7 @@ export function PayoutRow({ p, onAction, compact = false }) {
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 truncate text-sm font-medium text-mist">
             {p.payee_name}
-            {p.payee_kind === 'external' && <span className="rounded bg-sky-500/15 px-1 text-[10px] font-normal text-sky-400">External</span>}
+            {kind.tag && <span className={cn('rounded px-1 text-[10px] font-normal', kind.tagClass)}>{kind.tag}</span>}
           </div>
           <div className="truncate text-xs text-muted-foreground">
             {p.category}{p.description ? ` · ${p.description}` : ''}
@@ -218,7 +237,7 @@ function PayoutDialog({ payout, meta, onClose, onSaved }) {
   const [form, setForm] = useState({
     payee_kind: payout.payee_kind ?? 'team',
     payee_user_id: payout.payee_user?.id ? String(payout.payee_user.id) : NONE,
-    payee_name: payout.payee_kind === 'external' ? payout.payee_name : '',
+    payee_name: payout.payee_kind && payout.payee_kind !== 'team' ? payout.payee_name : '',
     category: payout.category ?? '',
     description: payout.description ?? '',
     amount: payout.amount ?? '',
@@ -235,7 +254,8 @@ function PayoutDialog({ payout, meta, onClose, onSaved }) {
   const err = (k) => errors[k]?.[0];
   const systems = meta?.client_systems ?? [];
   const linked = systems.find((o) => String(o.id) === form.client_system_id);
-  const isExternal = form.payee_kind === 'external';
+  const isExternal = form.payee_kind !== 'team'; // a typed name (outside person or company bill)
+  const isBill = form.payee_kind === 'bill';
 
   const save = useMutation({
     mutationFn: async () => {
@@ -260,11 +280,11 @@ function PayoutDialog({ payout, meta, onClose, onSaved }) {
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Edit payout' : 'Add a payout'}</DialogTitle>
-          <DialogDescription>Someone we pay regularly (or once). It shows up here and on the dashboard when it's due.</DialogDescription>
+          <DialogDescription>A salary, fee, commission or bill we pay regularly (or once). It shows up here and on the dashboard when it's due.</DialogDescription>
         </DialogHeader>
         <form onSubmit={(e) => { e.preventDefault(); setErrors({}); save.mutate(); }} className="space-y-4">
-          <div className="grid grid-cols-2 gap-2">
-            {[['team', Users, 'Team member'], ['external', Handshake, 'Outside person / agent']].map(([k, Icon, label]) => (
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            {Object.entries(PAYEE_KINDS).map(([k, { icon: Icon, label }]) => (
               <button key={k} type="button" onClick={() => setForm((f) => ({ ...f, payee_kind: k }))}
                 className={cn('flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm transition-colors',
                   form.payee_kind === k ? 'border-crimson bg-crimson/15 text-white' : 'border-navy-600 text-muted-foreground hover:text-mist')}>
@@ -274,8 +294,9 @@ function PayoutDialog({ payout, meta, onClose, onSaved }) {
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {isExternal ? (
-              <Field label="Who gets paid" e={err('payee_name')}>
-                <Input value={form.payee_name} onChange={set('payee_name')} required maxLength={255} placeholder="e.g. Ana Reyes (agent)" />
+              <Field label={isBill ? 'Bill' : 'Who gets paid'} e={err('payee_name')}>
+                <Input value={form.payee_name} onChange={set('payee_name')} required maxLength={255}
+                  placeholder={isBill ? 'e.g. Office rent, PLDT internet, Google Workspace' : 'e.g. Ana Reyes (agent)'} />
               </Field>
             ) : (
               <Field label="Team member" e={err('payee_user_id')}>
@@ -289,7 +310,7 @@ function PayoutDialog({ payout, meta, onClose, onSaved }) {
               </Field>
             )}
             <Field label="For" e={err('category')}>
-              <Input value={form.category} onChange={set('category')} required maxLength={100} list="payout-categories" placeholder="Maintenance, Marketing, Commission…" />
+              <Input value={form.category} onChange={set('category')} required maxLength={100} list="payout-categories" placeholder="Salaries, Maintenance, Rent…" />
               <datalist id="payout-categories">{(meta?.categories ?? []).map((c) => <option key={c} value={c} />)}</datalist>
             </Field>
             <Field label="Amount (₱)" e={err('amount')}>
@@ -469,6 +490,102 @@ export function PayoutPayDialog({ payout, onClose }) {
             </Button>
           </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** One click: pay everything due this month (and overdue) at its usual amount. Untick what you're not paying yet. */
+export function PayAllDialog({ onClose }) {
+  const refresh = useRefreshMoney();
+  const { data, isLoading } = useQuery({
+    queryKey: ['payouts'],
+    queryFn: async () => (await api.get('/admin/payouts')).data,
+  });
+  const eom = endOfMonthISO();
+  const list = (data?.data ?? []).filter((p) => p.status === 'active');
+  const dueNow = list.filter((p) => p.next_due_date <= eom);
+  const later = list.filter((p) => p.next_due_date > eom);
+  const [picked, setPicked] = useState(null); // null until touched → everything due now is ticked
+  const selected = picked ?? new Set(dueNow.map((p) => p.id));
+  const toggle = (id) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setPicked(next);
+  };
+  const [paidOn, setPaidOn] = useState(todayISO());
+  const [method, setMethod] = useState(NONE);
+  const chosen = list.filter((p) => selected.has(p.id));
+  const total = chosen.reduce((t, p) => t + p.amount, 0);
+
+  const save = useMutation({
+    mutationFn: async () => (await api.post('/admin/payouts/pay-bulk', {
+      ids: chosen.map((p) => p.id), paid_on: paidOn, method: method === NONE ? null : method,
+    })).data,
+    onSuccess: (res) => {
+      toast.success(`${res.paid_count} payment${res.paid_count === 1 ? '' : 's'} recorded · ${peso(res.paid_total)}`, {
+        description: 'Saved in Expenses; each one moved to its next due date.',
+      });
+      refresh(); onClose();
+    },
+    onError: (e) => toast.error(e.response?.data?.message || 'Could not record — please try again.'),
+  });
+
+  const item = (p) => {
+    const meta = STATUS_META[p.due_state] ?? DUE_META.upcoming;
+    return (
+      <label key={p.id} className={cn('flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2 transition-colors',
+        selected.has(p.id) ? 'bg-crimson/10' : 'bg-navy-800/50 hover:bg-navy-700/60')}>
+        <input type="checkbox" className="h-4 w-4 accent-[#E91E4F]" checked={selected.has(p.id)} onChange={() => toggle(p.id)} />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-medium text-mist">{p.payee_name}</div>
+          <div className="truncate text-[11px] text-muted-foreground">{p.category}{p.description ? ` · ${p.description}` : ''}</div>
+        </div>
+        <div className="shrink-0 text-right">
+          <div className="text-sm font-semibold tabular-nums text-white">{peso(p.amount)}</div>
+          <div className="text-[11px]" style={{ color: meta.color }}>{dueLabel(p.days_until_due)}</div>
+        </div>
+      </label>
+    );
+  };
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && !save.isPending && onClose()}>
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Pay all due</DialogTitle>
+          <DialogDescription>Everything due this month is ticked. Untick anything you haven't paid yet, then confirm.</DialogDescription>
+        </DialogHeader>
+        {isLoading ? <Skeleton className="h-40" /> : (
+          <div className="max-h-[50vh] space-y-3 overflow-y-auto pr-1">
+            {dueNow.length ? <div className="space-y-1.5">{dueNow.map(item)}</div>
+              : <p className="py-4 text-center text-sm text-muted-foreground">Nothing left to pay this month.</p>}
+            {later.length > 0 && (
+              <details>
+                <summary className="cursor-pointer text-xs text-muted-foreground hover:text-mist">Pay ahead — {later.length} due later</summary>
+                <div className="mt-1.5 space-y-1.5">{later.map(item)}</div>
+              </details>
+            )}
+          </div>
+        )}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Date paid"><Input type="date" value={paidOn} onChange={(e) => setPaidOn(e.target.value)} required /></Field>
+          <Field label="Method">
+            <Select value={method} onValueChange={setMethod}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE}>Each one's usual method</SelectItem>
+                {Object.entries(METHOD_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </Field>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose} disabled={save.isPending}>Cancel</Button>
+          <Button disabled={save.isPending || !chosen.length} onClick={() => save.mutate()}>
+            {save.isPending ? <Spinner className="h-4 w-4" /> : <><CheckCheck /> Mark {chosen.length} paid · {peso(total)}</>}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

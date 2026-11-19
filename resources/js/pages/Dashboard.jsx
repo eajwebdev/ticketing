@@ -12,6 +12,7 @@ import { Skeleton, EmptyState } from '@/components/ui/misc';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { useDashboard, LiveBadge, TabSkeleton } from './dashboard/widgets';
+import { DateRangePicker, RANGE_PRESETS, toISO } from '@/components/ui/date-range-picker';
 import OverviewTab from './dashboard/OverviewTab';
 import FinanceTab from './dashboard/FinanceTab';
 import ExpensesTab from './dashboard/ExpensesTab';
@@ -74,7 +75,21 @@ function TeamDashboard() {
   const { user } = useAuth();
   const { openCreateTicket } = useCreateTicket();
   const [params, setParams] = useSearchParams();
-  const { data, isLoading, isError, isFetching, dataUpdatedAt, refetch } = useDashboard();
+  // ?from=YYYY-MM-DD&to=YYYY-MM-DD — default this month. Kept in the URL so it survives refresh and can be shared.
+  const thisMonth = RANGE_PRESETS.find((p) => p.key === 'this_month').get(new Date()).map(toISO);
+  const range = {
+    from: /^\d{4}-\d{2}-\d{2}$/.test(params.get('from') ?? '') ? params.get('from') : thisMonth[0],
+    to: /^\d{4}-\d{2}-\d{2}$/.test(params.get('to') ?? '') ? params.get('to') : thisMonth[1],
+  };
+  if (range.to < range.from) [range.from, range.to] = [thisMonth[0], thisMonth[1]];
+  const isDefaultRange = range.from === thisMonth[0] && range.to === thisMonth[1];
+  const setRange = (next) => setParams((p) => {
+    const n = new URLSearchParams(p);
+    if (next.from === thisMonth[0] && next.to === thisMonth[1]) { n.delete('from'); n.delete('to'); }
+    else { n.set('from', next.from); n.set('to', next.to); }
+    return n;
+  }, { replace: true });
+  const { data, isLoading, isError, isFetching, dataUpdatedAt, refetch } = useDashboard(range);
 
   const sections = data?.sections ?? ['overview'];
   const requested = params.get('tab');
@@ -94,7 +109,13 @@ function TeamDashboard() {
             <LiveBadge updatedAt={dataUpdatedAt} fetching={isFetching} error={isError && !!data} onRefresh={() => refetch()} />
           </div>
         </div>
-        <Button onClick={openCreateTicket} className="self-start sm:self-auto"><PlusCircle /> New Ticket</Button>
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <DateRangePicker value={range} onChange={setRange} align="end" />
+          {!isDefaultRange && (
+            <Button variant="ghost" size="sm" onClick={() => setRange({ from: thisMonth[0], to: thisMonth[1] })}>Reset</Button>
+          )}
+          <Button onClick={openCreateTicket}><PlusCircle /> New Ticket</Button>
+        </div>
       </div>
 
       {isLoading && !data ? (

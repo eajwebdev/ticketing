@@ -64,6 +64,9 @@ class PayoutController extends Controller
             'due_soon_amount' => round((float) Payout::dueSoon()->sum('amount'), 2),
             'paid_this_month' => round((float) Expense::whereNotNull('payout_id')->whereBetween('spent_on', $monthRange)->sum('amount'), 2),
             'active_count' => Payout::active()->count(),
+            // Everything still to pay this month (incl. overdue) — what "Pay all due" pays.
+            'due_this_month_count' => Payout::active()->whereDate('next_due_date', '<=', today()->endOfMonth())->count(),
+            'due_this_month_amount' => round((float) Payout::active()->whereDate('next_due_date', '<=', today()->endOfMonth())->sum('amount'), 2),
         ];
     }
 
@@ -112,37 +115,75 @@ class PayoutController extends Controller
             $p = Payout::lockForUpdate()->findOrFail($payout->id);
             abort_if($p->status === 'completed', 422, 'This one-time payout is already paid.');
 
-            $cycles = $p->isOnce() ? 1 : (int) ($data['cycles'] ?? 1);
-            $covered = $p->next_due_date->copy();
-            $period = $p->isOnce() ? 'one-time'
-                : ($cycles > 1 ? $covered->format('M Y').' + '.($cycles - 1).' more' : $covered->format('M Y'));
-
-            $expense = Expense::create([
-                'spent_on' => $data['paid_on'],
-                'category' => $p->category,
-                'description' => trim(($p->description ?: $p->category).' — '.$p->payee_name." ({$period})"),
-                'amount' => $data['amount'],
-                'payee' => $p->payee_name,
-                'method' => $data['method'] ?? $p->payout_method,
-                'reference' => $data['reference'] ?? null,
-                'notes' => $data['notes'] ?? null,
-                'recorded_by' => $request->user()->id,
-                'payout_id' => $p->id,
-                'client_system_id' => $p->client_system_id,
-                'covered_due_date' => $covered,
-            ]);
-
-            $p->update($p->isOnce()
-                ? ['status' => 'completed']
-                : ['next_due_date' => $p->dueDateAfterCycles($covered, $cycles)]);
-
-            return $expense;
+            return $this->recordPayment($p, $data, $request->user()->id);
         });
 
         return response()->json([
             'expense_id' => $expense->id,
             'data' => $payout->fresh(self::RELATIONS)->present(),
         ], 201);
+    }
+
+    /**
+     * One click: pay several payouts at their usual amount (one cycle each), e.g. all of
+     * this month's salaries and bills. Paused / already-completed ones are skipped.
+     */
+    public function payBulk(Request $request)
+    {
+        $data = $request->validate([
+            'ids' => ['required', 'array', 'min:1', 'max:200'],
+            'ids.*' => ['integer', 'distinct'],
+            'paid_on' => ['required', 'date', 'before_or_equal:'.today()->addDay()->toDateString()],
+            'method' => ['nullable', Rule::in(SystemPayment::METHODS)], // blank = each payout's usual method
+        ]);
+
+        $result = DB::transaction(function () use ($data, $request) {
+            $paid = collect();
+            foreach (Payout::lockForUpdate()->whereIn('id', $data['ids'])->active()->orderBy('next_due_date')->get() as $p) {
+                $paid->push($this->recordPayment($p, [
+                    'amount' => $p->amount, 'paid_on' => $data['paid_on'], 'method' => $data['method'] ?? null,
+                ], $request->user()->id));
+            }
+
+            // Unknown, paused or already-completed ids.
+            return ['paid' => $paid, 'skipped' => count($data['ids']) - $paid->count()];
+        });
+
+        return response()->json([
+            'paid_count' => $result['paid']->count(),
+            'paid_total' => round((float) $result['paid']->sum('amount'), 2),
+            'skipped' => $result['skipped'],
+        ], 201);
+    }
+
+    /** Save one payment as an Expense and move the payout forward. Caller holds the row lock. */
+    private function recordPayment(Payout $p, array $data, int $userId): Expense
+    {
+        $cycles = $p->isOnce() ? 1 : (int) ($data['cycles'] ?? 1);
+        $covered = $p->next_due_date->copy();
+        $period = $p->isOnce() ? 'one-time'
+            : ($cycles > 1 ? $covered->format('M Y').' + '.($cycles - 1).' more' : $covered->format('M Y'));
+
+        $expense = Expense::create([
+            'spent_on' => $data['paid_on'],
+            'category' => $p->category,
+            'description' => trim(($p->description ?: $p->category).' — '.$p->payee_name." ({$period})"),
+            'amount' => $data['amount'],
+            'payee' => $p->payee_name,
+            'method' => ($data['method'] ?? null) ?: $p->payout_method,
+            'reference' => $data['reference'] ?? null,
+            'notes' => $data['notes'] ?? null,
+            'recorded_by' => $userId,
+            'payout_id' => $p->id,
+            'client_system_id' => $p->client_system_id,
+            'covered_due_date' => $covered,
+        ]);
+
+        $p->update($p->isOnce()
+            ? ['status' => 'completed']
+            : ['next_due_date' => $p->dueDateAfterCycles($covered, $cycles)]);
+
+        return $expense;
     }
 
     public function payments(Payout $payout)
@@ -176,7 +217,7 @@ class PayoutController extends Controller
             'payee_kind' => ['required', Rule::in(Payout::PAYEE_KINDS)],
             'payee_user_id' => ['nullable', 'required_if:payee_kind,team', 'integer',
                 Rule::exists('users', 'id')->whereNot('role', 'customer')],
-            'payee_name' => ['nullable', 'required_if:payee_kind,external', 'string', 'max:255'],
+            'payee_name' => ['nullable', 'required_unless:payee_kind,team', 'string', 'max:255'],
             'category' => ['required', 'string', 'max:100'],
             'description' => ['nullable', 'string', 'max:255'],
             'amount' => ['required', 'numeric', 'gt:0', 'max:9999999999'],
@@ -189,7 +230,7 @@ class PayoutController extends Controller
             'notes' => ['nullable', 'string', 'max:2000'],
         ], [
             'payee_user_id.required_if' => 'Pick the team member.',
-            'payee_name.required_if' => 'Enter who gets paid.',
+            'payee_name.required_unless' => 'Enter who gets paid.',
         ]);
 
         if ($data['payee_kind'] === 'team') {

@@ -27,11 +27,20 @@ class DashboardController extends Controller
 
     private const ACTIVE_TICKET = [TicketStatus::Open, TicketStatus::Accepted, TicketStatus::Reopened];
 
+    /** The period being looked at: ['from', 'to', 'prev_from', 'prev_to', 'label', 'bucket']. */
+    private array $range;
+
     public function index(Request $request)
     {
         /** @var User $user */
         $user = $request->user();
         abort_unless($user->isTeam(), 403);
+
+        $request->validate([
+            'from' => ['nullable', 'date_format:Y-m-d', 'required_with:to'],
+            'to' => ['nullable', 'date_format:Y-m-d', 'required_with:from', 'after_or_equal:from'],
+        ]);
+        $this->range = self::resolveRange($request->input('from'), $request->input('to'));
 
         $canFinance = $user->hasPermission(Permissions::BILLING);
         $canSupport = $user->hasPermission(Permissions::TICKETS) || $user->hasPermission(Permissions::ANALYTICS);
@@ -39,6 +48,15 @@ class DashboardController extends Controller
 
         $out = [
             'generated_at' => now()->toIso8601String(),
+            'range' => [
+                'from' => $this->range['from']->toDateString(),
+                'to' => $this->range['to']->toDateString(),
+                'prev_from' => $this->range['prev_from']->toDateString(),
+                'prev_to' => $this->range['prev_to']->toDateString(),
+                'label' => $this->range['label'],
+                'bucket' => $this->range['bucket'],
+                'includes_today' => $this->range['from']->lte(today()) && $this->range['to']->gte(today()),
+            ],
             'sections' => array_values(array_filter([
                 'overview',
                 $canFinance ? 'finance' : null,
@@ -65,29 +83,32 @@ class DashboardController extends Controller
 
     private function finance(): array
     {
-        $monthStart = today()->startOfMonth();
-        $prevStart = $monthStart->copy()->subMonthNoOverflow();
-        $sum = fn ($model, $col, Carbon $from, Carbon $to) => round((float) $model::whereBetween($col, [$from->toDateString(), $to->toDateString()])->sum('amount'), 2);
+        ['from' => $from, 'to' => $to, 'prev_from' => $prevFrom, 'prev_to' => $prevTo] = $this->range;
+        $period = [$from->toDateString(), $to->toDateString()];
+        $sum = fn ($model, $col, Carbon $a, Carbon $b) => round((float) $model::whereBetween($col, [$a->toDateString(), $b->toDateString()])->sum('amount'), 2);
 
-        $revenue = $sum(SystemPayment::class, 'paid_at', $monthStart, today()->endOfMonth());
-        $expenses = $sum(Expense::class, 'spent_on', $monthStart, today()->endOfMonth());
-        // Same days of last month, so mid-month comparisons are fair.
-        $prevSameDay = $prevStart->copy()->addDays(min(today()->day, $prevStart->daysInMonth) - 1);
-        $revenuePrev = $sum(SystemPayment::class, 'paid_at', $prevStart, $prevSameDay);
-        $expensesPrev = $sum(Expense::class, 'spent_on', $prevStart, $prevSameDay);
+        $revenue = $sum(SystemPayment::class, 'paid_at', $from, $to);
+        $expenses = $sum(Expense::class, 'spent_on', $from, $to);
+        // The previous period of the same length (same days of last month for "this month").
+        $revenuePrev = $sum(SystemPayment::class, 'paid_at', $prevFrom, $prevTo);
+        $expensesPrev = $sum(Expense::class, 'spent_on', $prevFrom, $prevTo);
 
         $active = ClientSystem::active()->get(['amount', 'billing_cycle']);
 
         return [
             'month' => [
-                'label' => $monthStart->format('F Y'),
+                'label' => $this->range['label'],
                 'revenue' => $revenue,
                 'expenses' => $expenses,
                 'net' => round($revenue - $expenses, 2),
                 'revenue_prev' => $revenuePrev,
                 'expenses_prev' => $expensesPrev,
                 'net_prev' => round($revenuePrev - $expensesPrev, 2),
-                'payments_count' => SystemPayment::whereBetween('paid_at', [$monthStart->toDateString(), today()->endOfMonth()->toDateString()])->count(),
+                // Expenses split: fixed monthly costs paid via Payouts (salaries, maintenance,
+                // commissions, bills) vs everything else recorded by hand.
+                'fixed_paid' => $fixedPaid = round((float) Expense::whereNotNull('payout_id')->whereBetween('spent_on', $period)->sum('amount'), 2),
+                'other_expenses' => round($expenses - $fixedPaid, 2),
+                'payments_count' => SystemPayment::whereBetween('paid_at', $period)->count(),
             ],
             'receivables' => [
                 'overdue_count' => ClientSystem::overdue()->count(),
@@ -97,12 +118,11 @@ class DashboardController extends Controller
                 'setup_unpaid_count' => ClientSystem::setupUnpaid()->count(),
                 'setup_unpaid_amount' => round((float) ClientSystem::setupUnpaid()->sum('setup_fee'), 2),
             ],
-            'setup_revenue' => round((float) SystemPayment::where('kind', 'setup')
-                ->whereBetween('paid_at', [$monthStart->toDateString(), today()->endOfMonth()->toDateString()])->sum('amount'), 2),
+            'setup_revenue' => round((float) SystemPayment::where('kind', 'setup')->whereBetween('paid_at', $period)->sum('amount'), 2),
             'mrr' => round($active->sum(fn ($s) => $s->monthlyValue()), 2),
             'active_systems' => $active->count(),
-            'trend' => $this->monthlyTrend(6),
-            'expenses_by_category' => Expense::whereBetween('spent_on', [$monthStart->toDateString(), today()->endOfMonth()->toDateString()])
+            'trend' => $this->moneyTrend(),
+            'expenses_by_category' => Expense::whereBetween('spent_on', $period)
                 ->selectRaw('category, SUM(amount) as total')->groupBy('category')->orderByDesc('total')->get()
                 ->map(fn ($r) => ['category' => $r->category, 'total' => round((float) $r->total, 2)])->values(),
             'due' => ClientSystemResource::collection(
@@ -139,41 +159,113 @@ class DashboardController extends Controller
         ];
     }
 
-    /** Revenue vs expenses for the last N months (including this one). */
-    private function monthlyTrend(int $months): array
+    /**
+     * Revenue vs expenses over the selected range, by day (short ranges) or month.
+     * A single month gets the 6 months up to it, so there's something to compare against.
+     */
+    private function moneyTrend(): array
     {
-        $start = today()->startOfMonth()->subMonthsNoOverflow($months - 1);
-        $range = [$start->toDateString(), today()->endOfMonth()->toDateString()];
+        ['from' => $from, 'to' => $to, 'bucket' => $bucket] = $this->range;
+        if ($this->range['single_month']) {
+            $from = $from->copy()->subMonthsNoOverflow(5);
+            $bucket = 'month';
+        }
+        $range = [$from->toDateString(), $to->toDateString()];
+        $fmt = $bucket === 'day' ? 'Y-m-d' : 'Y-m';
 
         $revenue = SystemPayment::whereBetween('paid_at', $range)->get(['paid_at', 'amount'])
-            ->groupBy(fn ($p) => Carbon::parse($p->paid_at)->format('Y-m'))->map->sum('amount');
+            ->groupBy(fn ($p) => Carbon::parse($p->paid_at)->format($fmt))->map->sum('amount');
         $expenses = Expense::whereBetween('spent_on', $range)->get(['spent_on', 'amount'])
-            ->groupBy(fn ($e) => $e->spent_on->format('Y-m'))->map->sum('amount');
+            ->groupBy(fn ($e) => $e->spent_on->format($fmt))->map->sum('amount');
 
         $out = [];
-        for ($m = $start->copy(); $m->lte(today()); $m->addMonthNoOverflow()) {
-            $key = $m->format('Y-m');
+        foreach (self::buckets($from, $to, $bucket) as [$key, $label]) {
             $r = round((float) ($revenue[$key] ?? 0), 2);
             $e = round((float) ($expenses[$key] ?? 0), 2);
-            $out[] = ['month' => $key, 'label' => $m->format('M'), 'revenue' => $r, 'expenses' => $e, 'net' => round($r - $e, 2)];
+            $out[] = ['month' => $key, 'label' => $label, 'revenue' => $r, 'expenses' => $e, 'net' => round($r - $e, 2)];
         }
 
         return $out;
+    }
+
+    /** [[key, label], …] for each day or month between $from and $to. */
+    private static function buckets(Carbon $from, Carbon $to, string $bucket): array
+    {
+        $out = [];
+        $multiYear = $from->year !== $to->year;
+        if ($bucket === 'day') {
+            for ($d = $from->copy(); $d->lte($to); $d->addDay()) {
+                $out[] = [$d->format('Y-m-d'), $d->format('M j')];
+            }
+        } else {
+            for ($m = $from->copy()->startOfMonth(); $m->lte($to); $m->addMonthNoOverflow()) {
+                $out[] = [$m->format('Y-m'), $m->format($multiYear ? "M 'y" : 'M')];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Turn ?from=&to= into the period plus the one to compare with. Default: this month.
+     * Whole months compare with the same days of the months before (Nov 1–19 vs Oct 1–19);
+     * any other range with the same number of days right before it.
+     */
+    public static function resolveRange(?string $from, ?string $to): array
+    {
+        $from = $from ? Carbon::parse($from)->startOfDay() : today()->startOfMonth();
+        $to = $to ? Carbon::parse($to)->startOfDay() : today()->endOfMonth()->startOfDay();
+        if ($from->diffInDays($to) > 366 * 5) {
+            $from = $to->copy()->subYears(5)->addDay(); // keep queries bounded
+        }
+
+        $wholeMonths = $from->day === 1 && $to->isSameDay($to->copy()->endOfMonth());
+        // Compare only the part that has happened so far.
+        $elapsedTo = $to->gt(today()) ? today()->max($from) : $to;
+        $days = (int) $from->diffInDays($elapsedTo) + 1;
+
+        if ($wholeMonths) {
+            $months = ($to->year - $from->year) * 12 + $to->month - $from->month + 1;
+            $prevFrom = $from->copy()->subMonthsNoOverflow($months);
+            $prevTo = $prevFrom->copy()->addDays($days - 1)->min($from->copy()->subDay());
+        } else {
+            $prevTo = $from->copy()->subDay();
+            $prevFrom = $prevTo->copy()->subDays($days - 1);
+        }
+
+        $singleMonth = $wholeMonths && $from->isSameMonth($to);
+        $label = match (true) {
+            $singleMonth => $from->format('F Y'),
+            $wholeMonths && $from->month === 1 && $to->month === 12 && $from->year === $to->year => (string) $from->year,
+            $wholeMonths && $from->month % 3 === 1 && $from->isSameYear($to) && $to->month === $from->month + 2 => 'Q'.intdiv($from->month + 2, 3).' '.$from->year,
+            $from->isSameDay($to) => $from->format('M j, Y'),
+            $from->isSameYear($to) => $from->format('M j').' – '.$to->format('M j, Y'),
+            default => $from->format('M j, Y').' – '.$to->format('M j, Y'),
+        };
+
+        return [
+            'from' => $from, 'to' => $to, 'prev_from' => $prevFrom, 'prev_to' => $prevTo,
+            'label' => $label, 'single_month' => $singleMonth,
+            'bucket' => $from->diffInDays($to) <= 62 ? 'day' : 'month',
+        ];
     }
 
     // ---------------------------------------------------------------- support
 
     private function support(): array
     {
-        $since = today()->subDays(13);
-        $created = Ticket::where('created_at', '>=', $since)->get(['created_at'])
-            ->groupBy(fn ($t) => $t->created_at->toDateString())->map->count();
-        $resolved = Ticket::where('resolved_at', '>=', $since)->get(['resolved_at'])
-            ->groupBy(fn ($t) => $t->resolved_at->toDateString())->map->count();
+        // Ticket flow across the selected range (but never into the future).
+        ['from' => $from, 'bucket' => $bucket] = $this->range;
+        $to = $this->range['to']->copy()->min(today())->max($from);
+        $window = [$from->copy()->startOfDay(), $to->copy()->endOfDay()];
+        $fmt = $bucket === 'day' ? 'Y-m-d' : 'Y-m';
+        $created = Ticket::whereBetween('created_at', $window)->get(['created_at'])
+            ->groupBy(fn ($t) => $t->created_at->format($fmt))->map->count();
+        $resolved = Ticket::whereBetween('resolved_at', $window)->get(['resolved_at'])
+            ->groupBy(fn ($t) => $t->resolved_at->format($fmt))->map->count();
         $daily = [];
-        for ($d = $since->copy(); $d->lte(today()); $d->addDay()) {
-            $k = $d->toDateString();
-            $daily[] = ['date' => $k, 'label' => $d->format('M j'), 'created' => (int) ($created[$k] ?? 0), 'resolved' => (int) ($resolved[$k] ?? 0)];
+        foreach (self::buckets($from, $to, $bucket) as [$k, $label]) {
+            $daily[] = ['date' => $k, 'label' => $label, 'created' => (int) ($created[$k] ?? 0), 'resolved' => (int) ($resolved[$k] ?? 0)];
         }
 
         $byUrgency = Ticket::with('urgency:id,name,color,sort_order')->whereIn('status', self::ACTIVE_TICKET)->get(['id', 'urgency_id'])
@@ -191,6 +283,8 @@ class DashboardController extends Controller
             'created_today' => Ticket::whereDate('created_at', today())->count(),
             'resolved_today' => Ticket::whereDate('resolved_at', today())->count(),
             'daily' => $daily,
+            'created_in_range' => (int) $created->sum(),
+            'resolved_in_range' => (int) $resolved->sum(),
             'by_urgency' => $byUrgency,
             'oldest_waiting' => Ticket::with(['customer:id,name,store_name', 'urgency:id,name,color'])
                 ->whereIn('status', self::OPEN_TICKET)->oldest()->limit(6)->get()
@@ -260,6 +354,8 @@ class DashboardController extends Controller
                 'pipeline_monthly' => round((float) Lead::whereIn('stage', $open)->sum('monthly_fee'), 2),
                 'open' => Lead::whereIn('stage', $open)->count(),
                 'won_this_month' => Lead::where('stage', 'won')->where('converted_at', '>=', today()->startOfMonth())->count(),
+                'won_in_range' => Lead::where('stage', 'won')
+                    ->whereBetween('converted_at', [$this->range['from']->copy()->startOfDay(), $this->range['to']->copy()->endOfDay()])->count(),
                 'follow_ups' => Lead::with('owner:id,name')->whereIn('stage', $open)
                     ->whereNotNull('next_follow_up')->whereDate('next_follow_up', '<=', today()->addDays(2))
                     ->orderBy('next_follow_up')->limit(6)->get()

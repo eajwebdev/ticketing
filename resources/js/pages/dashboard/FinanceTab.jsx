@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Wallet, Repeat, AlertTriangle, CalendarClock, TrendingUp, Receipt, PiggyBank, History, BadgeCheck, Wrench, HandCoins } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PayDialog, SetupPayDialog } from '@/pages/admin/ClientSystems';
-import { PayoutRow, PayoutPayDialog, useRefreshMoney } from './PayoutsTab';
+import { PayoutRow, PayoutPayDialog, PayAllDialog, useRefreshMoney } from './PayoutsTab';
 import { peso, dueLabel, DUE_META, METHOD_LABELS, shortDate, localDate } from '@/lib/format';
 import {
   Kpi, KpiGrid, Panel, PanelLink, Delta, pctChange, MoneyTrendChart, Row, AllClear, BarList, PALETTE,
@@ -40,7 +40,8 @@ export default function FinanceTab({ data }) {
           to={po?.monthly_total > 0 ? '/app?tab=payouts' : '/app/admin/client-systems'} />
       </KpiGrid>
 
-      <Panel title="Collected vs expenses" icon={TrendingUp} subtitle="Last 6 months. Blue line = net profit.">
+      <Panel title="Collected vs expenses" icon={TrendingUp}
+        subtitle={`${f.trend.length > 0 ? `${f.trend[0].label} – ${f.trend[f.trend.length - 1].label}` : f.month.label}. Blue line = net profit.`}>
         <MoneyTrendChart data={f.trend} height={300} />
       </Panel>
 
@@ -63,7 +64,14 @@ export default function FinanceTab({ data }) {
 
         <Panel title="Payouts to make" icon={HandCoins}
           subtitle={po ? `${peso(po.monthly_total)}/mo committed · ${peso(po.paid_this_month)} paid this month` : undefined}
-          action={<PanelLink to="/app?tab=payouts">All payouts</PanelLink>}>
+          action={(
+            <div className="flex items-center gap-3">
+              {po?.due_this_month_count > 0 && (
+                <Button size="sm" onClick={() => setDialog({ kind: 'payAll' })}>Pay all due · {peso(po.due_this_month_amount)}</Button>
+              )}
+              <PanelLink to="/app?tab=payouts">All payouts</PanelLink>
+            </div>
+          )}>
           {po?.due?.length ? (
             <ul className="space-y-2">
               {po.due.map((p) => <PayoutRow key={p.id} p={p} compact onAction={(_, item) => setDialog({ kind: 'payout', item })} />)}
@@ -108,6 +116,7 @@ export default function FinanceTab({ data }) {
       {dialog?.kind === 'pay' && <PayDialog system={dialog.item} onClose={() => setDialog(null)} onSaved={refresh} />}
       {dialog?.kind === 'setup' && <SetupPayDialog system={dialog.item} onClose={() => setDialog(null)} onSaved={refresh} />}
       {dialog?.kind === 'payout' && <PayoutPayDialog payout={dialog.item} onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'payAll' && <PayAllDialog onClose={() => setDialog(null)} />}
     </div>
   );
 }

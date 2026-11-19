@@ -26,7 +26,7 @@ export default function SupportTab({ data }) {
       </KpiGrid>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-        <Panel className="lg:col-span-2" title="Ticket flow" icon={Activity} subtitle="Created vs resolved, last 14 days."
+        <Panel className="lg:col-span-2" title="Ticket flow" icon={Activity} subtitle={`Created vs resolved · ${data.range?.label ?? ''} · ${s.created_in_range ?? 0} new, ${s.resolved_in_range ?? 0} resolved`}
           action={can(user, P.ANALYTICS) && <PanelLink to="/app/admin/analytics">Full analytics</PanelLink>}>
           <ResponsiveContainer width="100%" height={260}>
             <AreaChart data={s.daily} margin={{ left: -16, right: 8, top: 8 }}>
